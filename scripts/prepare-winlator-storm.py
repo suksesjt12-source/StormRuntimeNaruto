@@ -216,7 +216,7 @@ public class MainActivity extends AppCompatActivity {
             raf.seek(offset);
             if (raf.readUnsignedByte() != 'P' || raf.readUnsignedByte() != 'E' || raf.readUnsignedByte() != 0 || raf.readUnsignedByte() != 0) return false;
             int machine = Short.reverseBytes(raf.readShort()) & 0xffff;
-            raf.skipBytes(20);
+            raf.skipBytes(18);
             int magic = Short.reverseBytes(raf.readShort()) & 0xffff;
             return machine == 0x014c && magic == 0x010b;
         } catch (Exception e) { return false; }
