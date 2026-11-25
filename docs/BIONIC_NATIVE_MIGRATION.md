@@ -99,3 +99,12 @@ All M1–M6 items are pending. The existing repository audits explicitly state t
 ## Rollback policy
 
 Keep the previous experiment branch intact. Do not delete the Winlator-derived baseline or replace its workflow until the Bionic-native runtime passes M1 and M2. Do not claim a standalone Windows runtime until M3 passes on physical hardware.
+
+
+## Additional Bionic Wine candidate discovered (2026-11-26)
+
+GameNative's Proton-Wine release notes publish Android/Bionic fixes, including Bionic PE-image mapping, Android clipboard/intent bridges, libresolv/nsiproxy adaptations, and audio/gamepad fixes. The release distinguishes GameNative Proton packages from Wine packages intended for Winlator CMOD/Ludashi. This is a stronger research candidate than assuming a generic glibc Hangover archive can run on Android, but it is not yet approved as a drop-in runtime.
+
+Reference: https://github.com/GameNative/proton-wine/releases
+
+Before adoption, verify the exact source commit and license, whether the package contains the required i386 WoW64 translator for PE32, its Android display/window backend, its runtime dependency closure, and whether the relevant package can be redistributed inside this APK. The Bionic ARM64 probe added in this branch is independent of that evaluation.
