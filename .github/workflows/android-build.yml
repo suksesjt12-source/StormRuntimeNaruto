@@ -42,11 +42,26 @@ jobs:
       - name: Build debug APK
         run: gradle --no-daemon clean assembleDebug
 
-      - name: Verify APK
+      - name: Verify APK package and ARM64 native library
+        shell: bash
         run: |
-          test -s app/build/outputs/apk/debug/app-debug.apk
-          "$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging app/build/outputs/apk/debug/app-debug.apk
-          "$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging app/build/outputs/apk/debug/app-debug.apk | grep -q "package: name='id.stormruntime.naruto'"
+          set -euo pipefail
+          APK="app/build/outputs/apk/debug/app-debug.apk"
+          test -s "$APK"
+
+          BADGING="$(aapt dump badging "$APK")"
+          printf '%s\n' "$BADGING"
+          grep -q "package: name='id.stormruntime.naruto'" <<< "$BADGING"
+          grep -q "native-code: 'arm64-v8a'" <<< "$BADGING"
+
+          unzip -Z1 "$APK" | tee apk-contents.txt
+          grep -Fxq "lib/arm64-v8a/libstormcore.so" apk-contents.txt
+
+          echo "APK_SHA256=$(sha256sum "$APK" | cut -d ' ' -f 1)" | tee -a "$GITHUB_STEP_SUMMARY"
+          echo "Verified package: id.stormruntime.naruto" >> "$GITHUB_STEP_SUMMARY"
+          echo "Verified ABI: arm64-v8a" >> "$GITHUB_STEP_SUMMARY"
+          echo "Verified JNI library: lib/arm64-v8a/libstormcore.so" >> "$GITHUB_STEP_SUMMARY"
+          echo "Note: APK verification does not test Wine, PE32 execution, DXVK, or game compatibility." >> "$GITHUB_STEP_SUMMARY"
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
@@ -54,3 +69,4 @@ jobs:
           name: storm-runtime-naruto-debug
           path: app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
+          retention-days: 90
