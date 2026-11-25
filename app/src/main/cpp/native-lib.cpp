@@ -245,7 +245,11 @@ Java_id_stormruntime_naruto_NativeBridge_setAndroidSurface(JNIEnv* env, jobject,
     }
     if (previous) ANativeWindow_release(previous);
 
+    // Hold a temporary reference while probing so a concurrent surface-destroy
+    // callback cannot release the window during Vulkan surface creation.
+    ANativeWindow_acquire(next);
     std::string status = probeAndroidSurface(next);
+    ANativeWindow_release(next);
     return env->NewStringUTF(status.c_str());
 }
 
