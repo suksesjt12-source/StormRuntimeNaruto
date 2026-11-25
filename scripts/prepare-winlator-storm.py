@@ -262,9 +262,9 @@ methods = r"""
         file.delete();
     }
 """
+class_needle = "public class MainActivity extends AppCompatActivity implements NavigationView.OnNavigationItemSelectedListener {"
 if source.count(class_needle) != 1:
-    throw new Error("MainActivity class declaration mismatch");
-source = source.replace(class_needle, class_needle + methods, 1);
+    raise SystemExit("MainActivity class declaration mismatch.")
+source = source.replace(class_needle, class_needle + methods, 1)
 launcher.write_text(source, encoding="utf-8")
 print("Storm launcher patched while preserving upstream MainActivity API.")
-
