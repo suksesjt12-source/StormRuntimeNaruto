@@ -234,7 +234,7 @@ class MainActivity : Activity(), SurfaceHolder.Callback {
                 }
                 deleteRecursively(backup)
                 runOnUiThread {
-                    importStatus.text = "Folder game siap di filesystem lokal:\n${destination.absolutePath}\n$copiedFiles file • ${copiedBytes / (1024 * 1024)} MB".replace("$c opiedFiles", "$copiedFiles")
+                    importStatus.text = "Folder game siap di filesystem lokal:\n${destination.absolutePath}\n$copiedFiles file • ${copiedBytes / (1024 * 1024)} MB"
                 }
             } catch (error: Exception) {
                 runOnUiThread {
