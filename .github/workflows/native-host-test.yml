@@ -1,0 +1,41 @@
+name: Native Host Tests
+
+on:
+  workflow_dispatch:
+  push:
+    branches: ["experiment/wine-hangover-android"]
+    paths:
+      - "runtime/host/**"
+      - "runtime/common/**"
+      - "tests/native/**"
+      - ".github/workflows/native-host-test.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  native-host:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure native host test
+        run: cmake -S tests/native -B build/native-host -DCMAKE_BUILD_TYPE=Release
+      - name: Build native host test
+        run: cmake --build build/native-host --parallel 2
+      - name: Run native host test
+        run: ctest --test-dir build/native-host --output-on-failure
+      - name: Record commit and source checksum
+        run: |
+          set -euo pipefail
+          printf 'COMMIT_SHA=%s\n' "$GITHUB_SHA" | tee build/native-host/TEST-METADATA.txt
+          sha256sum build/native-host/storm_native_host_test | tee build/native-host/TEST-SHA256.txt
+      - name: Upload native host test evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: native-host-test-evidence
+          path: |
+            build/native-host/TEST-METADATA.txt
+            build/native-host/TEST-SHA256.txt
+            build/native-host/Testing/Temporary/LastTest.log
+          if-no-files-found: error
+          retention-days: 30
