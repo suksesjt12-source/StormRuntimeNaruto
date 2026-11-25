@@ -1,0 +1,52 @@
+name: Hangover Android Porting Audit
+
+on:
+  workflow_dispatch:
+  push:
+    branches: ["main"]
+    paths:
+      - "scripts/audit-hangover-android.sh"
+      - ".github/workflows/hangover-audit.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  verify-upstream-inputs:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Verify pinned Hangover 11.16 archives
+        shell: bash
+        run: bash scripts/audit-hangover-android.sh
+
+      - name: Inspect current Termux integration constraints
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl --fail --location --retry 3 \
+            https://raw.githubusercontent.com/termux/termux-packages/master/x11-packages/hangover-wine/build.sh \
+            -o termux-hangover-build.sh
+          grep -nE 'TERMUX_PKG_VERSION=|enable_wineandroid_drv=no|--enable-archs=|TERMUX_PKG_DEPENDS=' \
+            termux-hangover-build.sh | tee TERMUX-CONSTRAINTS.txt
+          grep -q 'enable_wineandroid_drv=no' termux-hangover-build.sh
+          {
+            echo "## Hangover Android porting audit"
+            echo "- Pinned Hangover/Wine 11.16 source and ARM64 archive checksums: PASS"
+            echo "- Current Termux recipe disables Wine Android display driver: CONFIRMED"
+            echo "- This is dependency/source integrity auditing, not an Android Wine build or runtime test."
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload audit evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: hangover-android-porting-audit
+          path: |
+            build/hangover-audit/INPUT-SHA256.txt
+            build/hangover-audit/wine-source-files.txt
+            build/hangover-audit/hangover-arm64-files.txt
+            TERMUX-CONSTRAINTS.txt
+          if-no-files-found: error
+          retention-days: 30
