@@ -47,6 +47,13 @@ jobs:
       - name: Brand the upstream Android runtime as Storm Runtime
         run: python3 scripts/prepare-winlator-storm.py third_party/winlator-app
 
+      - name: Verify Storm launcher integration patch
+        run: |
+          set -euo pipefail
+          grep -q 'PILIH FOLDER GAME' third_party/winlator-app/app/src/main/java/com/winlator/MainActivity.java
+          grep -q 'XServerDisplayActivity.class' third_party/winlator-app/app/src/main/java/com/winlator/MainActivity.java
+          grep -q 'NSUNSR.exe' third_party/winlator-app/app/src/main/java/com/winlator/MainActivity.java
+
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
         with:
