@@ -4,16 +4,20 @@ import android.app.Activity
 import android.os.Bundle
 import android.content.Intent
 import android.net.Uri
+import android.view.Surface
+import android.view.SurfaceHolder
+import android.view.SurfaceView
 import android.widget.*
 import androidx.documentfile.provider.DocumentFile
 import java.io.ByteArrayOutputStream
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
 
-class MainActivity : Activity() {
+class MainActivity : Activity(), SurfaceHolder.Callback {
     private lateinit var folderStatus: TextView
     private lateinit var exeStatus: TextView
     private lateinit var runtimeStatus: TextView
+    private lateinit var surfaceStatus: TextView
     private var selectedTree: Uri? = null
 
     companion object { private const val PICK_GAME_FOLDER = 4101 }
@@ -21,7 +25,7 @@ class MainActivity : Activity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         buildUi()
-        runtimeStatus.text = "Runtime: belum terintegrasi"
+        runtimeStatus.text = "Runtime: Wine/Hangover belum tersedia"
         exeStatus.text = "NSUNSR.exe: belum diperiksa"
     }
 
@@ -48,7 +52,7 @@ class MainActivity : Activity() {
 
         panel.addView(label("STORM RUNTIME", 26f))
         panel.addView(label("Naruto Shippuden: Ultimate Ninja Storm Revolution"))
-        panel.addView(label("Android Native • Prototype 0.1.0"))
+        panel.addView(label("Android Native • Surface Diagnostic Prototype 0.2.0"))
         panel.addView(button("Pilih folder instalasi game") { pickFolder() })
         folderStatus = label("Folder game: belum dipilih")
         panel.addView(folderStatus)
@@ -56,27 +60,30 @@ class MainActivity : Activity() {
         panel.addView(exeStatus)
 
         panel.addView(label("Pengaturan awal", 20f))
-        panel.addView(label("Resolusi target pengujian"))
-        val resolution = Spinner(this).apply {
-            adapter = ArrayAdapter(this@MainActivity, android.R.layout.simple_spinner_dropdown_item,
-                listOf("960 × 540", "854 × 480", "1280 × 720"))
-        }
-        panel.addView(resolution)
-        panel.addView(label("Batas FPS target"))
-        val fps = Spinner(this).apply {
-            adapter = ArrayAdapter(this@MainActivity, android.R.layout.simple_spinner_dropdown_item,
-                listOf("30 FPS", "45 FPS", "60 FPS"))
-        }
-        panel.addView(fps)
-        panel.addView(label("Diagnostik", 20f))
-        runtimeStatus = label("")
+        panel.addView(label("Resolusi target pengujian: 960 × 540"))
+        panel.addView(label("Batas FPS target: 30 FPS"))
+        panel.addView(label("Android Vulkan surface diagnostic", 20f))
+        surfaceStatus = label("Surface: menunggu SurfaceView dibuat")
+        panel.addView(surfaceStatus)
+
+        val surfaceView = SurfaceView(this)
+        surfaceView.holder.addCallback(this)
+        panel.addView(surfaceView, LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.MATCH_PARENT, (220 * resources.displayMetrics.density).toInt()
+        ))
+
+        panel.addView(label("Runtime status", 20f))
+        runtimeStatus = label(NativeBridge.status())
         panel.addView(runtimeStatus)
-        panel.addView(label("Status native: ${NativeBridge.status()}"))
-        panel.addView(label("Diagnostik Vulkan: ${NativeBridge.vulkanStatus()}"))
-        panel.addView(label("Catatan: aplikasi ini saat ini adalah kerangka launcher/diagnostik. Belum dapat menjalankan EXE Windows."))
+        panel.addView(label("Vulkan device diagnostic:"))
+        panel.addView(label(NativeBridge.vulkanStatus()))
+        panel.addView(label("Catatan: surface probe membuat VkSurfaceKHR dan memeriksa present support. Belum membuat swapchain atau menjalankan Wine/EXE."))
         panel.addView(button("Periksa ulang file game") { inspectGameFolder() })
-        panel.addView(button("Lihat informasi kompatibilitas") {
-            runtimeStatus.text = "Game memerlukan Windows API, CPU x86 32-bit, dan DirectX 9. Runtime Wine + translator + graphics backend belum dipaketkan."
+        panel.addView(button("Periksa ulang Android surface") {
+            surfaceStatus.text = NativeBridge.androidSurfaceStatus()
+        })
+        panel.addView(button("Lihat status runtime") {
+            runtimeStatus.text = NativeBridge.status()
         })
     }
 
@@ -100,6 +107,19 @@ class MainActivity : Activity() {
             folderStatus.text = "Folder game: dipilih"
             inspectGameFolder()
         }
+    }
+
+    override fun surfaceCreated(holder: SurfaceHolder) {
+        surfaceStatus.text = NativeBridge.setAndroidSurface(holder.surface)
+    }
+
+    override fun surfaceChanged(holder: SurfaceHolder, format: Int, width: Int, height: Int) {
+        surfaceStatus.text = NativeBridge.androidSurfaceStatus()
+    }
+
+    override fun surfaceDestroyed(holder: SurfaceHolder) {
+        NativeBridge.clearAndroidSurface()
+        surfaceStatus.text = "Surface: dilepas (lifecycle destroy)"
     }
 
     private fun inspectGameFolder() {
@@ -140,20 +160,14 @@ class MainActivity : Activity() {
         }
     }
 
-    // true = Windows PE32/i386; false = another PE architecture;
-    // null = incomplete or invalid PE header.
     private fun inspectPe32X86(data: ByteArray): Boolean? {
-        if (data.size < 64 || data[0] != 0x4D.toByte() || data[1] != 0x5A.toByte()) {
-            return null
-        }
+        if (data.size < 64 || data[0] != 0x4D.toByte() || data[1] != 0x5A.toByte()) return null
         val header = ByteBuffer.wrap(data).order(ByteOrder.LITTLE_ENDIAN)
         val peOffset = header.getInt(0x3C).toLong() and 0xFFFFFFFFL
         if (peOffset > (data.size - 26).toLong()) return null
         val pe = peOffset.toInt()
         if (data[pe] != 0x50.toByte() || data[pe + 1] != 0x45.toByte() ||
-            data[pe + 2] != 0.toByte() || data[pe + 3] != 0.toByte()) {
-            return null
-        }
+            data[pe + 2] != 0.toByte() || data[pe + 3] != 0.toByte()) return null
         val machine = header.getShort(pe + 4).toInt() and 0xFFFF
         val optionalMagic = header.getShort(pe + 24).toInt() and 0xFFFF
         return machine == 0x014C && optionalMagic == 0x010B
@@ -164,4 +178,7 @@ object NativeBridge {
     init { System.loadLibrary("stormcore") }
     external fun status(): String
     external fun vulkanStatus(): String
+    external fun setAndroidSurface(surface: Surface): String
+    external fun androidSurfaceStatus(): String
+    external fun clearAndroidSurface()
 }
