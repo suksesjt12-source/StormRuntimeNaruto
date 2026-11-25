@@ -458,7 +458,7 @@ std::string probeAndroidSurface(ANativeWindow* window) {
     } else out << "\nSwapchain acquire/present: BLOCKED — no graphics/present queue.";
     destroySurface(instance, surface, nullptr);
     vkDestroyInstance(instance, nullptr);
-    out << "\nNote: one-frame presentation test only; no game rendering.";
+    out << "\nNote: renderer test clears and presents one solid-color frame; no game rendering."
     return out.str();
 }
 }  // namespace
@@ -545,19 +545,19 @@ Java_id_stormruntime_naruto_NativeBridge_setAndroidSurface(JNIEnv* env, jobject,
     ANativeWindow* next = ANativeWindow_fromSurface(env, surface);
     if (!next) return env->NewStringUTF("ANativeWindow_fromSurface failed.");
 
+    // Keep a temporary reference before publishing the window. A concurrent
+    // surfaceDestroyed callback may clear the global reference immediately.
+    ANativeWindow_acquire(next);
     ANativeWindow* previous = nullptr;
     {
         std::lock_guard<std::mutex> lock(g_surfaceMutex);
         previous = g_window;
-        g_window = next;
+        g_window = next;  // takes ownership of ANativeWindow_fromSurface reference
     }
     if (previous) ANativeWindow_release(previous);
 
-    // Hold a temporary reference while probing so a concurrent surface-destroy
-    // callback cannot release the window during Vulkan surface creation.
-    ANativeWindow_acquire(next);
     std::string status = probeAndroidSurface(next);
-    ANativeWindow_release(next);
+    ANativeWindow_release(next);  // release temporary probe reference
     return env->NewStringUTF(status.c_str());
 }
 
