@@ -99,3 +99,44 @@ No Wine process manager is integrated. There is no actual Windows process launch
 7. Only then integrate DXVK, swapchain presentation, D3D9, audio/input forwarding, and finally the user's legally obtained game files.
 
 Do not mark any later stage PASS based solely on source code or a successful APK build.
+
+
+---
+
+## Current audit addendum — 2026-11-26
+
+This addendum supersedes older branch-head and Vulkan statements above where they differ.
+
+### Current repository heads and CI
+
+- `main`: `c4f27f4bef670914de8d72a7df9cce13677a6af8` at the start of this audit; APK workflow run [45701032445](https://github.com/suksesjt12-source/StormRuntimeNaruto/actions/runs/45701032445) completed successfully.
+- `experiment/android-vulkan-swapchain`: `9d5eba1fcc5268215340f9a14b44e061b63f31b1` at the start of this audit; experimental APK workflow run [45700990064](https://github.com/suksesjt12-source/StormRuntimeNaruto/actions/runs/45700990064) completed successfully.
+- Documentation commits made after that snapshot are on `main`; these do not add Wine/Hangover runtime functionality.
+
+### Experimental Vulkan branch clarification
+
+The experimental branch goes beyond the earlier surface-only probe: it creates a swapchain, image views, a render pass, framebuffers, records a clear-only render pass, submits it, and presents a single solid-color frame. It is still only a one-frame clear/present experiment. There is no game draw pipeline, persistent renderer, swapchain recreation implementation verified under lifecycle changes, DXVK, D3D9, or Wine connection. Physical-device execution on the target phone remains unverified.
+
+### Hangover source audit
+
+The pinned upstream reference inspected is Hangover `hangover-11.16` (release commit prefix `56e385b`). Its compile guide documents a Linux-hosted Wine build, llvm-mingw cross tools, submodules, and separate Box64/FEX WoW64 DLL build paths. It does not document a drop-in Android NDK application runtime.
+
+The current Termux package recipe was inspected directly. It pins 11.16, builds `i386,aarch64,arm64ec`, and installs the WoW64 emulator DLLs. Critically, it sets `enable_wineandroid_drv=no` and uses Termux package dependencies and installation paths. Therefore it cannot be treated as an Android Activity display driver or copied into this APK unchanged.
+
+A Wine Android driver patch series (MR10569 v15, posted May 25, 2026) proposes separating the Android UI process from the Wine process, citing seccomp and Wine thread/signal-context concerns. This is a patch proposal, not proof that the pinned Hangover release contains the required Android process/display architecture. See [the dedicated porting audit](ANDROID_WINE_HANGOVER_PORTING_AUDIT.md).
+
+### Current evidence-based status
+
+| Capability | Status |
+|---|---|
+| Android APK CI build and ARM64 JNI packaging | PASS in GitHub Actions |
+| PE32/i386 probe cross-compilation | PASS in existing workflow; compilation only |
+| Experimental one-frame Vulkan clear/present | COMPILED in experimental branch; target-device execution unverified |
+| Wine/Hangover Bionic runtime in APK | NOT IMPLEMENTED |
+| Wine Android display/process integration | NOT IMPLEMENTED |
+| Wine prefix and Windows process manager | NOT IMPLEMENTED |
+| PE32 probe executed with exit code 37 | NOT IMPLEMENTED |
+| DXVK/D3D9, audio/input forwarding | NOT IMPLEMENTED |
+| Original `NSUNSR.exe` launch and gameplay | NOT IMPLEMENTED |
+
+Do not report the app as game-capable until the packaged Android runtime executes the PE32 probe on a physical device and verifies its log plus exit code 37.
