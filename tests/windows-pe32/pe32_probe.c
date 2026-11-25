@@ -1,6 +1,7 @@
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
 #include <stdio.h>
+#include <string.h>
 
 int main(void) {
     char path[MAX_PATH];
@@ -13,10 +14,13 @@ int main(void) {
         return 20;
     }
 
-    if (strcat_s(path, sizeof(path), "storm-pe32-probe.log") != 0) {
-        OutputDebugStringA("STORM_PE32_PROBE: path construction failed\n");
+    const char suffix[] = "storm-pe32-probe.log";
+    size_t path_length = strlen(path);
+    if (path_length + sizeof(suffix) > sizeof(path)) {
+        OutputDebugStringA("STORM_PE32_PROBE: path too long\n");
         return 21;
     }
+    memcpy(path + path_length, suffix, sizeof(suffix));
 
     HANDLE file = CreateFileA(path, GENERIC_WRITE, FILE_SHARE_READ, NULL,
                               CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
