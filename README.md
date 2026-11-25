@@ -1,25 +1,42 @@
-# Storm Runtime Naruto — Android Native Prototype
+# Storm Runtime Naruto — Android ARM64 Compatibility Runtime Prototype
 
-This repository is a starter Android project for a Naruto Storm Revolution compatibility-runtime experiment.
+This repository is an experimental Android ARM64 project targeting the original Windows x86 (32-bit) executable `NSUNSR.exe` from Naruto Shippuden: Ultimate Ninja Storm Revolution.
 
-## Current contents
+## Implemented and verifiable in source
+
 - Kotlin Android launcher in landscape mode.
-- Android Storage Access Framework folder picker.
-- Basic `NSUNSR.exe` detection in the selected folder.
-- Initial resolution/FPS selectors.
-- JNI/C++ native-core health/status probe.
-- GitHub Actions workflow for a debug APK build.
+- Storage Access Framework game-folder picker and root-level `NSUNSR.exe` detection.
+- Initial resolution and FPS target selectors (settings only; they do not yet control a game renderer).
+- JNI native library loaded by the Android app.
+- Native Vulkan loader / physical-device diagnostic using the Android Vulkan API.
+- GitHub Actions workflow for ARM64 debug APK builds, APK package verification, and artifact upload.
 
-## Compatibility status
-**This prototype does not run Windows EXE files yet.** The native core is a diagnostic stub. A working runtime still requires compatible, correctly licensed components for Windows API compatibility (such as Wine), 32-bit x86 execution on ARM64, Direct3D 9 translation to a supported Android graphics API, plus audio, input, filesystem, and process integration.
+## Runtime status — NOT GAME-CAPABLE YET
 
-Do not describe this prototype as a working Winlator replacement until those components are integrated and the target game is tested.
+**The app does not currently run Windows executables.** The following core components are not integrated:
 
-## Build
-Pushes to `main` and manual workflow dispatch trigger the Android APK build. The resulting debug APK is uploaded as a GitHub Actions artifact.
+- Wine for Android / Win32 API and Windows process environment.
+- A supported x86 32-bit-on-ARM64 execution path integrated with Wine (Box86 or another proven solution).
+- D3D9 translation and a working graphics path for Mali-G57.
+- Windows audio integration and Android audio backend.
+- Game input forwarding, touch controls, and game process lifecycle.
+- End-to-end execution and testing of `NSUNSR.exe`.
 
-## Initial device target
-Android ARM64, Android 14+, 8 GB RAM, and a Mali-G57-class GPU. Initial performance testing target: 960×540 at 30 FPS; this is a target, not a guarantee.
+The Vulkan probe only reports whether Android can create a Vulkan instance and enumerate physical devices. It does **not** establish DXVK compatibility, D3D9 support, or game compatibility.
 
-## Legal note
-Use only game files and runtime components you are authorized to use. This repository does not include Naruto game assets or proprietary runtime binaries.
+The UI must not be interpreted as a working Winlator replacement. No success state is emitted for Wine, CPU translation, DXVK, or game execution.
+
+## CI build
+
+Pushes to `main` and manual workflow dispatch run the Android debug APK workflow. A successful APK build verifies packaging and compilation only; it does not verify runtime or game execution.
+
+## Target device
+
+- Infinix Hot 50 4G
+- MediaTek Helio G100 / Mali-G57 MC2
+- Android 14, ARM64, 8 GB RAM
+- Initial performance test target: 960×540 at 30 FPS (not a performance guarantee)
+
+## Licensing and game files
+
+Use only game files and runtime components you are authorized to use. This repository does not include Naruto game assets or proprietary runtime binaries. Any future third-party runtime integration must preserve upstream licensing and required notices.
