@@ -9,25 +9,33 @@ This repository is an experimental Android ARM64 project targeting the original 
 - Basic PE header inspection to distinguish Windows PE32/i386 from other executable formats.
 - JNI native library and Android Vulkan device diagnostics.
 - ARM64-only Gradle configuration, JVM 17 target alignment, and pinned Android NDK.
-- GitHub Actions APK build, package verification, and artifact upload workflow.
+- GitHub Actions APK build, package verification, checksum, and artifact upload.
+- Experimental branch: one-frame Vulkan render-pass clear and present test (not a game renderer).
 
 ## Runtime status — NOT GAME-CAPABLE YET
 
 **The app does not currently run Windows executables.**
 
-The preferred runtime research candidate is [Hangover](https://github.com/AndreRH/hangover), which combines ARM64 Wine WoW64 with emulator DLLs for i386 and x86_64 Windows applications. The Termux package recipe demonstrates an Android ARM64 packaging route, but currently builds a Wine configuration using X11 and disables Wine's Android display driver. It is not directly embeddable into this native Activity without additional display, input, audio, and filesystem integration.
+The preferred runtime research candidate is [Hangover](https://github.com/AndreRH/hangover), which combines ARM64 Wine WoW64 with emulator DLLs for i386 and x86_64 Windows applications. Hangover documents `wowbox64.dll` and `libwow64fex.dll` for i386 translation. However, the current Termux package recipe explicitly disables Wine's Android display driver and depends on Termux libraries and package paths. It is not directly embeddable into this native Activity.
 
-Box86 is not being treated as a standalone Windows executable translator: upstream Box86 targets x86 Linux userspace and requires a 32-bit ARM host userspace. See [the compatibility audit](docs/COMPATIBILITY_AUDIT.md) for the architecture comparison.
+The current Android app also runs its UI in a JVM Activity process. A Wine Android driver patch series proposes separating the Android UI and Wine processes due to Android seccomp and Wine thread/signal-context concerns. That proposal must be verified and integrated deliberately; simply loading Wine through JNI in the Activity is not an acceptable shortcut.
+
+See:
+- [Compatibility audit](docs/COMPATIBILITY_AUDIT.md)
+- [Android Wine/Hangover porting audit](docs/ANDROID_WINE_HANGOVER_PORTING_AUDIT.md)
+
+Box86 is not being treated as a standalone Windows executable translator: upstream Box86 targets x86 Linux userspace and requires a 32-bit ARM host userspace.
 
 Still not integrated:
 - Wine/Hangover runtime and Wine prefix.
 - i386 WoW64 translator DLL (FEX or Box64 WOW64).
+- Android/Bionic Wine process host and display driver.
 - D3D9/DXVK with a validated Android Vulkan presentation path.
 - Windows audio and input forwarding.
 - Actual Windows process management.
 - End-to-end execution of `NSUNSR.exe`.
 
-The Vulkan probe does not prove DXVK or Direct3D 9 compatibility. Upstream DXVK does not provide first-party support for Android/mobile graphics drivers.
+The experimental Vulkan branch can compile a one-frame clear/present path, but it does not contain a game draw pipeline or a Wine/DXVK connection. It has not been verified on the target phone. A Vulkan probe does not prove DXVK or Direct3D 9 compatibility. Upstream DXVK requires Vulkan 1.3 and specific features, which must be checked on the actual device.
 
 ## CI build
 
