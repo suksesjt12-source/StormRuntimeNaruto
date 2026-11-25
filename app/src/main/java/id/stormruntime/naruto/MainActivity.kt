@@ -25,7 +25,12 @@ class MainActivity : Activity(), SurfaceHolder.Callback {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         buildUi()
-        runtimeStatus.text = "Runtime: Wine/Hangover belum tersedia"
+        val hostInitialized = NativeBridge.initialize(filesDir.absolutePath)
+        runtimeStatus.text = if (hostInitialized) {
+            NativeBridge.runtimeStatus()
+        } else {
+            "Native host initialization failed: ${NativeBridge.lastError()}"
+        }
         exeStatus.text = "NSUNSR.exe: belum diperiksa"
     }
 
@@ -83,8 +88,13 @@ class MainActivity : Activity(), SurfaceHolder.Callback {
             surfaceStatus.text = NativeBridge.androidSurfaceStatus()
         })
         panel.addView(button("Lihat status runtime") {
-            runtimeStatus.text = NativeBridge.status()
+            runtimeStatus.text = NativeBridge.runtimeStatus()
         })
+    }
+
+    override fun onDestroy() {
+        NativeBridge.shutdown()
+        super.onDestroy()
     }
 
     private fun pickFolder() {
@@ -176,6 +186,10 @@ class MainActivity : Activity(), SurfaceHolder.Callback {
 
 object NativeBridge {
     init { System.loadLibrary("stormcore") }
+    external fun initialize(appDataDirectory: String): Boolean
+    external fun shutdown()
+    external fun runtimeStatus(): String
+    external fun lastError(): String
     external fun status(): String
     external fun vulkanStatus(): String
     external fun setAndroidSurface(surface: Surface): String
