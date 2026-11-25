@@ -5,6 +5,8 @@
 #include <vulkan/vulkan_android.h>
 
 #include <mutex>
+#include <algorithm>
+#include <cstdint>
 #include <sstream>
 #include <string>
 #include <vector>
@@ -19,6 +21,119 @@ bool hasInstanceExtension(const std::vector<VkExtensionProperties>& extensions,
         if (std::string(extension.extensionName) == name) return true;
     }
     return false;
+}
+
+
+bool runSwapchainPresentProbe(VkPhysicalDevice physicalDevice, VkSurfaceKHR surface,
+                              ANativeWindow* window, std::string& detail) {
+    uint32_t familyCount = 0;
+    vkGetPhysicalDeviceQueueFamilyProperties(physicalDevice, &familyCount, nullptr);
+    std::vector<VkQueueFamilyProperties> families(familyCount);
+    if (familyCount) vkGetPhysicalDeviceQueueFamilyProperties(physicalDevice, &familyCount, families.data());
+    uint32_t queueFamily = UINT32_MAX;
+    for (uint32_t i = 0; i < familyCount; ++i) {
+        if (!families[i].queueCount || !(families[i].queueFlags & VK_QUEUE_GRAPHICS_BIT)) continue;
+        VkBool32 present = VK_FALSE;
+        if (vkGetPhysicalDeviceSurfaceSupportKHR(physicalDevice, i, surface, &present) == VK_SUCCESS && present) { queueFamily = i; break; }
+    }
+    if (queueFamily == UINT32_MAX) { detail = "No unified graphics/present queue family."; return false; }
+
+    uint32_t extensionCount = 0;
+    if (vkEnumerateDeviceExtensionProperties(physicalDevice, nullptr, &extensionCount, nullptr) != VK_SUCCESS) { detail = "Device-extension enumeration failed."; return false; }
+    std::vector<VkExtensionProperties> extensions(extensionCount);
+    if (vkEnumerateDeviceExtensionProperties(physicalDevice, nullptr, &extensionCount, extensions.data()) != VK_SUCCESS ||
+        !hasInstanceExtension(extensions, VK_KHR_SWAPCHAIN_EXTENSION_NAME)) { detail = "VK_KHR_swapchain unavailable."; return false; }
+
+    VkSurfaceCapabilitiesKHR caps{};
+    if (vkGetPhysicalDeviceSurfaceCapabilitiesKHR(physicalDevice, surface, &caps) != VK_SUCCESS ||
+        !(caps.supportedUsageFlags & VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT)) { detail = "Surface color-attachment usage unsupported."; return false; }
+
+    uint32_t formatCount = 0;
+    if (vkGetPhysicalDeviceSurfaceFormatsKHR(physicalDevice, surface, &formatCount, nullptr) != VK_SUCCESS || !formatCount) { detail = "No surface formats."; return false; }
+    std::vector<VkSurfaceFormatKHR> formats(formatCount);
+    if (vkGetPhysicalDeviceSurfaceFormatsKHR(physicalDevice, surface, &formatCount, formats.data()) != VK_SUCCESS) { detail = "Surface-format query failed."; return false; }
+    VkSurfaceFormatKHR chosen = formats.front();
+    if (formatCount == 1 && chosen.format == VK_FORMAT_UNDEFINED) { chosen.format = VK_FORMAT_B8G8R8A8_UNORM; chosen.colorSpace = VK_COLOR_SPACE_SRGB_NONLINEAR_KHR; }
+
+    VkExtent2D extent = caps.currentExtent;
+    if (extent.width == UINT32_MAX) {
+        const uint32_t width = static_cast<uint32_t>(std::max(1, ANativeWindow_getWidth(window)));
+        const uint32_t height = static_cast<uint32_t>(std::max(1, ANativeWindow_getHeight(window)));
+        extent.width = std::clamp(width, caps.minImageExtent.width, caps.maxImageExtent.width);
+        extent.height = std::clamp(height, caps.minImageExtent.height, caps.maxImageExtent.height);
+    }
+    uint32_t imageCount = caps.minImageCount + 1;
+    if (caps.maxImageCount && imageCount > caps.maxImageCount) imageCount = caps.maxImageCount;
+
+    const float priority = 1.0f;
+    VkDeviceQueueCreateInfo queueInfo{};
+    queueInfo.sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
+    queueInfo.queueFamilyIndex = queueFamily; queueInfo.queueCount = 1; queueInfo.pQueuePriorities = &priority;
+    const char* deviceExtensions[] = {VK_KHR_SWAPCHAIN_EXTENSION_NAME};
+    VkDeviceCreateInfo deviceInfo{};
+    deviceInfo.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
+    deviceInfo.queueCreateInfoCount = 1; deviceInfo.pQueueCreateInfos = &queueInfo;
+    deviceInfo.enabledExtensionCount = 1; deviceInfo.ppEnabledExtensionNames = deviceExtensions;
+    VkDevice device = VK_NULL_HANDLE;
+    VkResult result = vkCreateDevice(physicalDevice, &deviceInfo, nullptr, &device);
+    if (result != VK_SUCCESS) { detail = "vkCreateDevice failed: " + std::to_string(result); return false; }
+
+    auto destroyDevice = [&]() { if (device) vkDestroyDevice(device, nullptr); };
+    auto createSwapchain = reinterpret_cast<PFN_vkCreateSwapchainKHR>(vkGetDeviceProcAddr(device, "vkCreateSwapchainKHR"));
+    auto destroySwapchain = reinterpret_cast<PFN_vkDestroySwapchainKHR>(vkGetDeviceProcAddr(device, "vkDestroySwapchainKHR"));
+    auto acquireImage = reinterpret_cast<PFN_vkAcquireNextImageKHR>(vkGetDeviceProcAddr(device, "vkAcquireNextImageKHR"));
+    auto presentQueue = reinterpret_cast<PFN_vkQueuePresentKHR>(vkGetDeviceProcAddr(device, "vkQueuePresentKHR"));
+    if (!createSwapchain || !destroySwapchain || !acquireImage || !presentQueue) { detail = "Swapchain entry points unavailable."; destroyDevice(); return false; }
+
+    const VkCompositeAlphaFlagBitsKHR alphaOptions[] = {VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR, VK_COMPOSITE_ALPHA_PRE_MULTIPLIED_BIT_KHR, VK_COMPOSITE_ALPHA_POST_MULTIPLIED_BIT_KHR, VK_COMPOSITE_ALPHA_INHERIT_BIT_KHR};
+    VkCompositeAlphaFlagBitsKHR alpha = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR;
+    bool alphaFound = false;
+    for (auto option : alphaOptions) if (caps.supportedCompositeAlpha & option) { alpha = option; alphaFound = true; break; }
+    if (!alphaFound) { detail = "No supported composite-alpha mode."; destroyDevice(); return false; }
+
+    VkSwapchainCreateInfoKHR swapInfo{};
+    swapInfo.sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR;
+    swapInfo.surface = surface; swapInfo.minImageCount = imageCount;
+    swapInfo.imageFormat = chosen.format; swapInfo.imageColorSpace = chosen.colorSpace;
+    swapInfo.imageExtent = extent; swapInfo.imageArrayLayers = 1;
+    swapInfo.imageUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
+    swapInfo.imageSharingMode = VK_SHARING_MODE_EXCLUSIVE;
+    swapInfo.preTransform = caps.currentTransform; swapInfo.compositeAlpha = alpha;
+    swapInfo.presentMode = VK_PRESENT_MODE_FIFO_KHR; swapInfo.clipped = VK_TRUE;
+    VkSwapchainKHR swapchain = VK_NULL_HANDLE;
+    result = createSwapchain(device, &swapInfo, nullptr, &swapchain);
+    if (result != VK_SUCCESS) { detail = "vkCreateSwapchainKHR failed: " + std::to_string(result); destroyDevice(); return false; }
+
+    VkSemaphoreCreateInfo semaphoreInfo{}; semaphoreInfo.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
+    VkSemaphore ready = VK_NULL_HANDLE;
+    result = vkCreateSemaphore(device, &semaphoreInfo, nullptr, &ready);
+    if (result != VK_SUCCESS) { detail = "vkCreateSemaphore failed: " + std::to_string(result); destroySwapchain(device, swapchain, nullptr); destroyDevice(); return false; }
+
+    uint32_t imageIndex = 0;
+    result = acquireImage(device, swapchain, 5000000000ULL, VK_NULL_HANDLE, ready, &imageIndex);
+    bool acquired = result == VK_SUCCESS || result == VK_SUBOPTIMAL_KHR;
+    bool presented = false;
+    if (!acquired) detail = "vkAcquireNextImageKHR failed: " + std::to_string(result);
+    if (acquired) {
+        VkQueue queue = VK_NULL_HANDLE; vkGetDeviceQueue(device, queueFamily, 0, &queue);
+        VkSubmitInfo submit{}; submit.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+        submit.signalSemaphoreCount = 1; submit.pSignalSemaphores = &ready;
+        VkResult submitResult = vkQueueSubmit(queue, 1, &submit, VK_NULL_HANDLE);
+        if (submitResult == VK_SUCCESS) {
+            VkPresentInfoKHR present{}; present.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
+            present.waitSemaphoreCount = 1; present.pWaitSemaphores = &ready;
+            present.swapchainCount = 1; present.pSwapchains = &swapchain; present.pImageIndices = &imageIndex;
+            VkResult presentResult = presentQueue(queue, &present);
+            presented = presentResult == VK_SUCCESS || presentResult == VK_SUBOPTIMAL_KHR;
+            if (!presented) detail = "vkQueuePresentKHR failed: " + std::to_string(presentResult);
+        } else detail = "vkQueueSubmit failed: " + std::to_string(submitResult);
+        vkQueueWaitIdle(queue);
+    }
+    vkDestroySemaphore(device, ready, nullptr);
+    destroySwapchain(device, swapchain, nullptr);
+    destroyDevice();
+    if (presented) detail = "swapchain created; image acquired and presented (no game rendering).";
+    return presented;
 }
 
 std::string probeAndroidSurface(ANativeWindow* window) {
@@ -112,6 +227,7 @@ std::string probeAndroidSurface(ANativeWindow* window) {
         << ANativeWindow_getWidth(window) << "x" << ANativeWindow_getHeight(window);
 
     bool presentQueueFound = false;
+    VkPhysicalDevice presentDevice = VK_NULL_HANDLE;
     for (uint32_t d = 0; d < deviceCount; ++d) {
         VkPhysicalDeviceProperties properties{};
         vkGetPhysicalDeviceProperties(devices[d], &properties);
@@ -141,16 +257,21 @@ std::string probeAndroidSurface(ANativeWindow* window) {
                     out << "\nSurface capabilities query failed: " << capResult;
                 }
                 presentQueueFound = true;
+                presentDevice = devices[d];
                 break;
             }
         }
     }
 
+    out << "\nPresentation support: " << (presentQueueFound ? "PASS" : "NO GRAPHICS PRESENT QUEUE");
+    if (presentQueueFound && presentDevice != VK_NULL_HANDLE) {
+        std::string swapchainDetail;
+        bool swapchainPass = runSwapchainPresentProbe(presentDevice, surface, window, swapchainDetail);
+        out << "\nSwapchain acquire/present: " << (swapchainPass ? "PASS" : "FAIL") << " — " << swapchainDetail;
+    } else out << "\nSwapchain acquire/present: BLOCKED — no graphics/present queue.";
     destroySurface(instance, surface, nullptr);
     vkDestroyInstance(instance, nullptr);
-
-    out << "\nPresentation support: " << (presentQueueFound ? "PASS" : "NO GRAPHICS PRESENT QUEUE");
-    out << "\nSwapchain: NOT CREATED (this probe validates VkSurfaceKHR/present support only).";
+    out << "\nNote: one-frame presentation test only; no game rendering.";
     return out.str();
 }
 }  // namespace
