@@ -69,6 +69,7 @@ class MainActivity : Activity() {
         runtimeStatus = label("")
         panel.addView(runtimeStatus)
         panel.addView(label("Status native: ${NativeBridge.status()}"))
+        panel.addView(label("Diagnostik Vulkan: ${NativeBridge.vulkanStatus()}"))
         panel.addView(label("Catatan: aplikasi ini saat ini adalah kerangka launcher/diagnostik. Belum dapat menjalankan EXE Windows."))
         panel.addView(button("Periksa ulang file game") { inspectGameFolder() })
         panel.addView(button("Lihat informasi kompatibilitas") {
@@ -116,4 +117,5 @@ class MainActivity : Activity() {
 object NativeBridge {
     init { System.loadLibrary("stormcore") }
     external fun status(): String
+    external fun vulkanStatus(): String
 }
