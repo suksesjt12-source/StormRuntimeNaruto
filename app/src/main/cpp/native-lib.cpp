@@ -3,6 +3,7 @@
 #include <android/native_window_jni.h>
 #include <vulkan/vulkan.h>
 #include <vulkan/vulkan_android.h>
+#include "../../../../runtime/host/runtime_host.h"
 
 #include <mutex>
 #include <algorithm>
@@ -462,6 +463,35 @@ std::string probeAndroidSurface(ANativeWindow* window) {
     return out.str();
 }
 }  // namespace
+
+extern "C"
+JNIEXPORT jboolean JNICALL
+Java_id_stormruntime_naruto_NativeBridge_initialize(JNIEnv* env, jobject, jstring appDataDirectory) {
+    if (appDataDirectory == nullptr) return JNI_FALSE;
+    const char* path = env->GetStringUTFChars(appDataDirectory, nullptr);
+    if (path == nullptr) return JNI_FALSE;
+    const bool initialized = storm::runtime::runtime_initialize(path);
+    env->ReleaseStringUTFChars(appDataDirectory, path);
+    return initialized ? JNI_TRUE : JNI_FALSE;
+}
+
+extern "C"
+JNIEXPORT void JNICALL
+Java_id_stormruntime_naruto_NativeBridge_shutdown(JNIEnv*, jobject) {
+    storm::runtime::runtime_shutdown();
+}
+
+extern "C"
+JNIEXPORT jstring JNICALL
+Java_id_stormruntime_naruto_NativeBridge_runtimeStatus(JNIEnv* env, jobject) {
+    return env->NewStringUTF(storm::runtime::runtime_get_status());
+}
+
+extern "C"
+JNIEXPORT jstring JNICALL
+Java_id_stormruntime_naruto_NativeBridge_lastError(JNIEnv* env, jobject) {
+    return env->NewStringUTF(storm::runtime::runtime_get_last_error());
+}
 
 extern "C"
 JNIEXPORT jstring JNICALL
