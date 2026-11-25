@@ -6,6 +6,7 @@
 #include <fstream>
 #include <mutex>
 #include <string>
+#include <stdexcept>
 #include <thread>
 
 namespace storm::runtime {
@@ -98,12 +99,16 @@ void runtime_shutdown() {
 }
 
 const char* runtime_get_status() {
+    thread_local std::string snapshot;
     std::lock_guard<std::mutex> lock(g_mutex);
-    return g_status.c_str();
+    snapshot = g_status;
+    return snapshot.c_str();
 }
 
 const char* runtime_get_last_error() {
+    thread_local std::string snapshot;
     std::lock_guard<std::mutex> lock(g_mutex);
-    return g_last_error.c_str();
+    snapshot = g_last_error;
+    return snapshot.c_str();
 }
 }
