@@ -105,23 +105,31 @@ bool runSwapchainPresentProbe(VkPhysicalDevice physicalDevice, VkSurfaceKHR surf
     if (result != VK_SUCCESS) { detail = "vkCreateSwapchainKHR failed: " + std::to_string(result); destroyDevice(); return false; }
 
     VkSemaphoreCreateInfo semaphoreInfo{}; semaphoreInfo.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
-    VkSemaphore ready = VK_NULL_HANDLE;
-    result = vkCreateSemaphore(device, &semaphoreInfo, nullptr, &ready);
-    if (result != VK_SUCCESS) { detail = "vkCreateSemaphore failed: " + std::to_string(result); destroySwapchain(device, swapchain, nullptr); destroyDevice(); return false; }
+    VkSemaphore acquiredSemaphore = VK_NULL_HANDLE, renderCompleteSemaphore = VK_NULL_HANDLE;
+    result = vkCreateSemaphore(device, &semaphoreInfo, nullptr, &acquiredSemaphore);
+    if (result == VK_SUCCESS) result = vkCreateSemaphore(device, &semaphoreInfo, nullptr, &renderCompleteSemaphore);
+    if (result != VK_SUCCESS) {
+        detail = "vkCreateSemaphore failed: " + std::to_string(result);
+        if (acquiredSemaphore) vkDestroySemaphore(device, acquiredSemaphore, nullptr);
+        destroySwapchain(device, swapchain, nullptr); destroyDevice(); return false;
+    }
 
     uint32_t imageIndex = 0;
-    result = acquireImage(device, swapchain, 5000000000ULL, VK_NULL_HANDLE, ready, &imageIndex);
+    result = acquireImage(device, swapchain, 5000000000ULL, VK_NULL_HANDLE, acquiredSemaphore, &imageIndex);
     bool acquired = result == VK_SUCCESS || result == VK_SUBOPTIMAL_KHR;
     bool presented = false;
     if (!acquired) detail = "vkAcquireNextImageKHR failed: " + std::to_string(result);
     if (acquired) {
         VkQueue queue = VK_NULL_HANDLE; vkGetDeviceQueue(device, queueFamily, 0, &queue);
+        const VkPipelineStageFlags waitStage = VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT;
         VkSubmitInfo submit{}; submit.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
-        submit.signalSemaphoreCount = 1; submit.pSignalSemaphores = &ready;
+        submit.waitSemaphoreCount = 1; submit.pWaitSemaphores = &acquiredSemaphore;
+        submit.pWaitDstStageMask = &waitStage;
+        submit.signalSemaphoreCount = 1; submit.pSignalSemaphores = &renderCompleteSemaphore;
         VkResult submitResult = vkQueueSubmit(queue, 1, &submit, VK_NULL_HANDLE);
         if (submitResult == VK_SUCCESS) {
             VkPresentInfoKHR present{}; present.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
-            present.waitSemaphoreCount = 1; present.pWaitSemaphores = &ready;
+            present.waitSemaphoreCount = 1; present.pWaitSemaphores = &renderCompleteSemaphore;
             present.swapchainCount = 1; present.pSwapchains = &swapchain; present.pImageIndices = &imageIndex;
             VkResult presentResult = presentQueue(queue, &present);
             presented = presentResult == VK_SUCCESS || presentResult == VK_SUBOPTIMAL_KHR;
@@ -129,7 +137,8 @@ bool runSwapchainPresentProbe(VkPhysicalDevice physicalDevice, VkSurfaceKHR surf
         } else detail = "vkQueueSubmit failed: " + std::to_string(submitResult);
         vkQueueWaitIdle(queue);
     }
-    vkDestroySemaphore(device, ready, nullptr);
+    vkDestroySemaphore(device, renderCompleteSemaphore, nullptr);
+    vkDestroySemaphore(device, acquiredSemaphore, nullptr);
     destroySwapchain(device, swapchain, nullptr);
     destroyDevice();
     if (presented) detail = "swapchain created; image acquired and presented (no game rendering).";
