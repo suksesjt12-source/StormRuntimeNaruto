@@ -115,7 +115,7 @@ bool runSwapchainPresentProbe(VkPhysicalDevice physicalDevice, VkSurfaceKHR surf
     }
 
     uint32_t imageIndex = 0;
-    result = acquireImage(device, swapchain, 5000000000ULL, VK_NULL_HANDLE, acquiredSemaphore, &imageIndex);
+    result = acquireImage(device, swapchain, 5000000000ULL, acquiredSemaphore, VK_NULL_HANDLE, &imageIndex);
     bool acquired = result == VK_SUCCESS || result == VK_SUBOPTIMAL_KHR;
     bool presented = false;
     if (!acquired) detail = "vkAcquireNextImageKHR failed: " + std::to_string(result);
