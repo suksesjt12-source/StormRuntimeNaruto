@@ -4,7 +4,7 @@ Updated: 2026-11-26
 
 | Phase | Scope | Exit evidence | Current state |
 |---|---|---|---|
-| 0 | Repository and dependency audit | Branch/file inventory, architecture and dependency docs | IN PROGRESS |
+| 0 | Repository and dependency audit | Branch/file inventory, architecture and dependency docs | IN PROGRESS (license audit remains) |
 | 1 | Android native host | JNI load, initialization, worker lifecycle, filesystem and lifecycle device test | IN PROGRESS |
 | 2 | Wine ARM64 on Android/Bionic | Android-compatible Wine build, linker/dependency audit, prefix on device | NOT STARTED |
 | 3 | Hangover WoW64 | Correct translator built and loaded by the selected Wine | NOT STARTED |
