@@ -22,13 +22,13 @@ jobs:
 
       - name: Set up Android SDK command-line tools
         uses: android-actions/setup-android@v3
+        with:
+          # Override the action's obsolete default "tools" package.
+          packages: "platform-tools"
 
-      # setup-android's packages input was passed to sdkmanager as one
-      # newline-containing package name. Install packages directly instead.
-      - name: Install Android SDK, NDK and CMake
+      - name: Install Android platform, build tools, NDK and CMake
         run: |
           sdkmanager --install \
-            "platform-tools" \
             "platforms;android-35" \
             "build-tools;35.0.0" \
             "cmake;3.22.1" \
