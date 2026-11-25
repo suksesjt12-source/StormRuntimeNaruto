@@ -6,6 +6,9 @@ import android.content.Intent
 import android.net.Uri
 import android.widget.*
 import androidx.documentfile.provider.DocumentFile
+import java.io.ByteArrayOutputStream
+import java.nio.ByteBuffer
+import java.nio.ByteOrder
 
 class MainActivity : Activity() {
     private lateinit var folderStatus: TextView
@@ -105,12 +108,55 @@ class MainActivity : Activity() {
             return
         }
         val tree = DocumentFile.fromTreeUri(this, uri)
-        val found = tree?.findFile("NSUNSR.exe")
-        exeStatus.text = if (found?.isFile == true) {
-            "NSUNSR.exe: ditemukan"
-        } else {
-            "NSUNSR.exe: tidak ditemukan di folder utama. Pilih folder yang berisi file EXE."
+        val exe = tree?.findFile("NSUNSR.exe")
+        if (exe?.isFile != true) {
+            exeStatus.text = "NSUNSR.exe: tidak ditemukan di folder utama."
+            return
         }
+
+        try {
+            val bytes = contentResolver.openInputStream(exe.uri)?.use { input ->
+                val output = ByteArrayOutputStream()
+                val buffer = ByteArray(8192)
+                var total = 0
+                while (total < 1024 * 1024) {
+                    val read = input.read(buffer, 0, minOf(buffer.size, 1024 * 1024 - total))
+                    if (read <= 0) break
+                    output.write(buffer, 0, read)
+                    total += read
+                }
+                output.toByteArray()
+            } ?: throw IllegalStateException("File tidak dapat dibaca.")
+
+            val peType = inspectPe32X86(bytes)
+            val fileSize = exe.length()
+            exeStatus.text = when (peType) {
+                true -> "NSUNSR.exe: PE32 x86 (i386) terdeteksi • ukuran ${fileSize} byte. Ini hanya validasi file, bukan bukti runtime siap."
+                false -> "NSUNSR.exe ditemukan, tetapi formatnya bukan PE32 x86 yang diharapkan."
+                null -> "NSUNSR.exe ditemukan, tetapi header PE tidak lengkap atau tidak valid."
+            }
+        } catch (e: Exception) {
+            exeStatus.text = "Gagal membaca NSUNSR.exe: ${e.message ?: "kesalahan I/O"}"
+        }
+    }
+
+    // true = Windows PE32/i386; false = another PE architecture;
+    // null = incomplete or invalid PE header.
+    private fun inspectPe32X86(data: ByteArray): Boolean? {
+        if (data.size < 64 || data[0] != 0x4D.toByte() || data[1] != 0x5A.toByte()) {
+            return null
+        }
+        val header = ByteBuffer.wrap(data).order(ByteOrder.LITTLE_ENDIAN)
+        val peOffset = header.getInt(0x3C).toLong() and 0xFFFFFFFFL
+        if (peOffset > (data.size - 26).toLong()) return null
+        val pe = peOffset.toInt()
+        if (data[pe] != 0x50.toByte() || data[pe + 1] != 0x45.toByte() ||
+            data[pe + 2] != 0.toByte() || data[pe + 3] != 0.toByte()) {
+            return null
+        }
+        val machine = header.getShort(pe + 4).toInt() and 0xFFFF
+        val optionalMagic = header.getShort(pe + 24).toInt() and 0xFFFF
+        return machine == 0x014C && optionalMagic == 0x010B
     }
 }
 
