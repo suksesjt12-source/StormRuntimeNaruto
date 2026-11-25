@@ -49,7 +49,7 @@ jobs:
           APK="app/build/outputs/apk/debug/app-debug.apk"
           test -s "$APK"
 
-          BADGING="$(aapt dump badging "$APK")"
+          BADGING="$("$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging "$APK")"
           printf '%s\n' "$BADGING"
           grep -q "package: name='id.stormruntime.naruto'" <<< "$BADGING"
           grep -q "native-code: 'arm64-v8a'" <<< "$BADGING"
