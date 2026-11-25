@@ -458,7 +458,7 @@ std::string probeAndroidSurface(ANativeWindow* window) {
     } else out << "\nSwapchain acquire/present: BLOCKED — no graphics/present queue.";
     destroySurface(instance, surface, nullptr);
     vkDestroyInstance(instance, nullptr);
-    out << "\nNote: renderer test clears and presents one solid-color frame; no game rendering."
+    out << "\nNote: renderer test clears and presents one solid-color frame; no game rendering.";
     return out.str();
 }
 }  // namespace
