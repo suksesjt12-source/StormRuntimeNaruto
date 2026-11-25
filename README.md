@@ -2,29 +2,32 @@
 
 This repository is an experimental Android ARM64 project targeting the original Windows x86 (32-bit) executable `NSUNSR.exe` from Naruto Shippuden: Ultimate Ninja Storm Revolution.
 
-## Implemented and verifiable in source
+## Implemented in source
 
 - Kotlin Android launcher in landscape mode.
-- Storage Access Framework game-folder picker and root-level `NSUNSR.exe` detection.
-- Initial resolution and FPS target selectors (settings only; they do not yet control a game renderer).
-- JNI native library loaded by the Android app.
-- Native Vulkan loader / physical-device diagnostic using the Android Vulkan API.
-- GitHub Actions workflow for ARM64 debug APK builds, APK package verification, and artifact upload.
+- Storage Access Framework game-folder picker.
+- Basic PE header inspection to distinguish Windows PE32/i386 from other executable formats.
+- JNI native library and Android Vulkan device diagnostics.
+- ARM64-only Gradle configuration, JVM 17 target alignment, and pinned Android NDK.
+- GitHub Actions APK build, package verification, and artifact upload workflow.
 
 ## Runtime status — NOT GAME-CAPABLE YET
 
-**The app does not currently run Windows executables.** The following core components are not integrated:
+**The app does not currently run Windows executables.**
 
-- Wine for Android / Win32 API and Windows process environment.
-- A supported x86 32-bit-on-ARM64 execution path integrated with Wine (Box86 or another proven solution).
-- D3D9 translation and a working graphics path for Mali-G57.
-- Windows audio integration and Android audio backend.
-- Game input forwarding, touch controls, and game process lifecycle.
-- End-to-end execution and testing of `NSUNSR.exe`.
+The preferred runtime research candidate is [Hangover](https://github.com/AndreRH/hangover), which combines ARM64 Wine WoW64 with emulator DLLs for i386 and x86_64 Windows applications. The Termux package recipe demonstrates an Android ARM64 packaging route, but currently builds a Wine configuration using X11 and disables Wine's Android display driver. It is not directly embeddable into this native Activity without additional display, input, audio, and filesystem integration.
 
-The Vulkan probe only reports whether Android can create a Vulkan instance and enumerate physical devices. It does **not** establish DXVK compatibility, D3D9 support, or game compatibility.
+Box86 is not being treated as a standalone Windows executable translator: upstream Box86 targets x86 Linux userspace and requires a 32-bit ARM host userspace. See [the compatibility audit](docs/COMPATIBILITY_AUDIT.md) for the architecture comparison.
 
-The UI must not be interpreted as a working Winlator replacement. No success state is emitted for Wine, CPU translation, DXVK, or game execution.
+Still not integrated:
+- Wine/Hangover runtime and Wine prefix.
+- i386 WoW64 translator DLL (FEX or Box64 WOW64).
+- D3D9/DXVK with a validated Android Vulkan presentation path.
+- Windows audio and input forwarding.
+- Actual Windows process management.
+- End-to-end execution of `NSUNSR.exe`.
+
+The Vulkan probe does not prove DXVK or Direct3D 9 compatibility. Upstream DXVK does not provide first-party support for Android/mobile graphics drivers.
 
 ## CI build
 
