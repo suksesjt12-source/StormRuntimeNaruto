@@ -57,7 +57,8 @@ jobs:
           unzip -Z1 "$APK" | tee apk-contents.txt
           grep -Fxq "lib/arm64-v8a/libstormcore.so" apk-contents.txt
 
-          echo "APK_SHA256=$(sha256sum "$APK" | cut -d ' ' -f 1)" | tee -a "$GITHUB_STEP_SUMMARY"
+          sha256sum "$APK" | tee APK-SHA256.txt
+          echo "APK_SHA256=$(cut -d ' ' -f 1 APK-SHA256.txt)" | tee -a "$GITHUB_STEP_SUMMARY"
           echo "Verified package: id.stormruntime.naruto" >> "$GITHUB_STEP_SUMMARY"
           echo "Verified ABI: arm64-v8a" >> "$GITHUB_STEP_SUMMARY"
           echo "Verified JNI library: lib/arm64-v8a/libstormcore.so" >> "$GITHUB_STEP_SUMMARY"
@@ -67,6 +68,8 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: storm-runtime-naruto-debug
-          path: app/build/outputs/apk/debug/app-debug.apk
+          path: |
+            app/build/outputs/apk/debug/app-debug.apk
+            APK-SHA256.txt
           if-no-files-found: error
           retention-days: 90
