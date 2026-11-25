@@ -2,7 +2,7 @@ name: Android APK Build
 on:
   workflow_dispatch:
   push:
-    branches: [ "main" ]
+    branches: ["main"]
 
 permissions:
   contents: read
@@ -20,17 +20,19 @@ jobs:
           distribution: temurin
           java-version: "17"
 
-      # The legacy "tools" SDK package no longer exists in current Android
-      # command-line repositories. Install the exact SDK packages this project uses.
-      - name: Set up Android SDK
+      - name: Set up Android SDK command-line tools
         uses: android-actions/setup-android@v3
-        with:
-          packages: |
-            platform-tools
-            platforms;android-35
-            build-tools;35.0.0
-            cmake;3.22.1
-            ndk;27.2.12479018
+
+      # setup-android's packages input was passed to sdkmanager as one
+      # newline-containing package name. Install packages directly instead.
+      - name: Install Android SDK, NDK and CMake
+        run: |
+          sdkmanager --install \
+            "platform-tools" \
+            "platforms;android-35" \
+            "build-tools;35.0.0" \
+            "cmake;3.22.1" \
+            "ndk;27.2.12479018"
 
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
@@ -40,8 +42,11 @@ jobs:
       - name: Build debug APK
         run: gradle --no-daemon clean assembleDebug
 
-      - name: Verify APK exists
-        run: test -s app/build/outputs/apk/debug/app-debug.apk
+      - name: Verify APK
+        run: |
+          test -s app/build/outputs/apk/debug/app-debug.apk
+          "$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging app/build/outputs/apk/debug/app-debug.apk
+          "$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging app/build/outputs/apk/debug/app-debug.apk | grep -q "package: name='id.stormruntime.naruto'"
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
