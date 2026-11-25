@@ -1,0 +1,39 @@
+name: Storm Bionic ARM64 Probe
+
+on:
+  workflow_dispatch:
+  push:
+    branches: ["experiment/bionic-native-runtime"]
+    paths:
+      - "runtime/bionic/**"
+      - "scripts/build-bionic-probe.sh"
+      - ".github/workflows/bionic-runtime-ci.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  build-bionic-probe:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Android NDK
+        uses: android-actions/setup-android@v3
+        with:
+          packages: "ndk;27.2.12479018"
+
+      - name: Build Android Bionic ARM64 executable
+        run: bash scripts/build-bionic-probe.sh
+
+      - name: Upload Bionic probe and ELF audit
+        uses: actions/upload-artifact@v4
+        with:
+          name: storm-bionic-arm64-probe
+          path: |
+            build/bionic-probe/storm-bionic-probe
+            build/bionic-probe/ELF-AUDIT.txt
+            build/bionic-probe/SHA256SUMS.txt
+          if-no-files-found: error
+          retention-days: 30
