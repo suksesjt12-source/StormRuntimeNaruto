@@ -27,188 +27,156 @@ s = re.sub(r'<string name="app_name">.*?</string>',
            '<string name="app_name">Storm Runtime Naruto</string>', s, count=1)
 strings.write_text(s, encoding="utf-8")
 
-java = r'''package com.winlator;
-
-import android.app.Activity;
-import android.content.Intent;
-import android.database.Cursor;
-import android.net.Uri;
-import android.os.Bundle;
-import android.provider.DocumentsContract;
-import android.view.Gravity;
-import android.view.View;
-import android.widget.Button;
-import android.widget.LinearLayout;
-import android.widget.TextView;
-import androidx.annotation.Nullable;
-import androidx.appcompat.app.AppCompatActivity;
-import com.winlator.box64.Box64Preset;
-import com.winlator.container.AudioDrivers;
-import com.winlator.container.Container;
-import com.winlator.container.ContainerManager;
-import com.winlator.container.DXWrappers;
-import com.winlator.container.GraphicsDrivers;
-import com.winlator.core.AppUtils;
-import com.winlator.xenvironment.RootFS;
-import com.winlator.xenvironment.RootFSInstaller;
-import org.json.JSONObject;
-import java.io.File;
-import java.io.FileOutputStream;
-import java.io.InputStream;
-import java.io.RandomAccessFile;
-import java.util.ArrayList;
-
-public class MainActivity extends AppCompatActivity {
-    private static final int PICK_GAME_FOLDER = 7101;
-    private TextView status;
-    private File gameDirectory;
-    private ContainerManager containers;
-
-    @Override public void onCreate(Bundle state) {
+# Keep upstream MainActivity's public API and runtime callbacks intact.
+source = launcher.read_text(encoding="utf-8")
+on_create = r"""    @Override
+    protected void onCreate(Bundle savedInstanceState) {
         AppUtils.setActivityTheme(this);
-        super.onCreate(state);
+        super.onCreate(savedInstanceState);
         buildStormLauncher();
         RootFSInstaller.installIfNeeded(this);
-        containers = new ContainerManager(this);
-        File saved = new File(getExternalFilesDir(null), "StormGame");
-        File exe = findExe(saved);
-        if (exe != null && isPe32(exe)) {
-            gameDirectory = saved;
-            status.setText("GAME READY\nNaruto Shippuden: Ultimate Ninja Storm Revolution");
+        stormContainers = new com.winlator.container.ContainerManager(this);
+        java.io.File saved = new java.io.File(getExternalFilesDir(null), "StormGame");
+        java.io.File exe = findStormExe(saved);
+        if (exe != null && isStormPe32(exe)) {
+            stormGameDirectory = saved;
+            stormStatus.setText("GAME READY\\nNaruto Shippuden: Ultimate Ninja Storm Revolution");
         }
     }
+"""
+source, count = re.subn(r"    @Override\s+protected void onCreate\(Bundle savedInstanceState\)\s*\{.*?\n    \}\n\n    @Override\s+protected void attachBaseContext", on_create + "\n    @Override\n    protected void attachBaseContext", source, count=1, flags=re.S)
+if count != 1:
+    raise SystemExit("Could not safely replace upstream onCreate method.")
+source, count = re.subn(r"(public void onActivityResult\(int requestCode, int resultCode, @Nullable UriDataPlaceholder data\))", r"\1", source)
+# Inject custom SAF handling into the existing callback without removing upstream file-picker handling.
+needle = "        super.onActivityResult(requestCode, resultCode, data);"
+if source.count(needle) != 1:
+    raise SystemExit("Could not locate upstream onActivityResult callback.")
+source = source.replace(needle, needle + "\n        onStormActivityResult(requestCode, resultCode, data);", 1)
+class_needle = "public class MainActivity extends AppCompatActivity implements NavigationView.OnNavigationItemSelectedListener {"
+methods = r"""
+    private static final int STORM_PICK_GAME_FOLDER = 7101;
+    private android.widget.TextView stormStatus;
+    private java.io.File stormGameDirectory;
+    private com.winlator.container.ContainerManager stormContainers;
 
     private void buildStormLauncher() {
-        LinearLayout root = new LinearLayout(this);
-        root.setOrientation(LinearLayout.VERTICAL);
-        root.setGravity(Gravity.CENTER_HORIZONTAL);
+        android.widget.LinearLayout root = new android.widget.LinearLayout(this);
+        root.setOrientation(android.widget.LinearLayout.VERTICAL);
+        root.setGravity(android.view.Gravity.CENTER_HORIZONTAL);
         root.setPadding(28, 42, 28, 28);
         root.setBackgroundColor(0xff10131b);
-
-        TextView brand = new TextView(this);
+        android.widget.TextView brand = new android.widget.TextView(this);
         brand.setText("STORM RUNTIME");
         brand.setTextColor(0xfff0a43a);
         brand.setTextSize(13);
         brand.setLetterSpacing(0.22f);
         root.addView(brand);
-
-        TextView title = new TextView(this);
-        title.setText("NARUTO SHIPPUDEN\nULTIMATE NINJA STORM REVOLUTION");
+        android.widget.TextView title = new android.widget.TextView(this);
+        title.setText("NARUTO SHIPPUDEN\\nULTIMATE NINJA STORM REVOLUTION");
         title.setTextColor(0xffffffff);
         title.setTextSize(21);
-        title.setGravity(Gravity.CENTER);
+        title.setGravity(android.view.Gravity.CENTER);
         title.setPadding(0, 24, 0, 18);
         root.addView(title);
-
-        status = new TextView(this);
-        status.setTextColor(0xffb8c0cf);
-        status.setTextSize(14);
-        status.setGravity(Gravity.CENTER);
-        status.setText("Pilih folder game yang berisi NSUNSR.exe.");
-        status.setPadding(0, 14, 0, 28);
-        root.addView(status);
-
-        Button choose = new Button(this);
+        stormStatus = new android.widget.TextView(this);
+        stormStatus.setTextColor(0xffb8c0cf);
+        stormStatus.setTextSize(14);
+        stormStatus.setGravity(android.view.Gravity.CENTER);
+        stormStatus.setText("Pilih folder game yang berisi NSUNSR.exe.");
+        stormStatus.setPadding(0, 14, 0, 28);
+        root.addView(stormStatus);
+        android.widget.Button choose = new android.widget.Button(this);
         choose.setText("PILIH FOLDER GAME");
-        choose.setOnClickListener(v -> chooseGameFolder());
-        root.addView(choose, new LinearLayout.LayoutParams(-1, -2));
-
-        Button play = new Button(this);
+        choose.setOnClickListener(v -> {
+            android.content.Intent intent = new android.content.Intent(android.content.Intent.ACTION_OPEN_DOCUMENT_TREE);
+            intent.addFlags(android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION | android.content.Intent.FLAG_GRANT_WRITE_URI_PERMISSION | android.content.Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION);
+            startActivityForResult(intent, STORM_PICK_GAME_FOLDER);
+        });
+        root.addView(choose, new android.widget.LinearLayout.LayoutParams(-1, -2));
+        android.widget.Button play = new android.widget.Button(this);
         play.setText("JALANKAN NARUTO");
-        play.setOnClickListener(v -> launchGame());
-        LinearLayout.LayoutParams playParams = new LinearLayout.LayoutParams(-1, -2);
-        playParams.topMargin = 14;
-        root.addView(play, playParams);
-
-        TextView detail = new TextView(this);
+        play.setOnClickListener(v -> launchStormGame());
+        android.widget.LinearLayout.LayoutParams pp = new android.widget.LinearLayout.LayoutParams(-1, -2);
+        pp.topMargin = 14;
+        root.addView(play, pp);
+        android.widget.TextView detail = new android.widget.TextView(this);
         detail.setText("Mali-G57 profile • 960×540 • DXVK • Box64 Performance • PulseAudio");
         detail.setTextColor(0xff7f899a);
         detail.setTextSize(11);
-        detail.setGravity(Gravity.CENTER);
+        detail.setGravity(android.view.Gravity.CENTER);
         detail.setPadding(0, 30, 0, 0);
         root.addView(detail);
         setContentView(root);
     }
 
-    private void chooseGameFolder() {
-        Intent intent = new Intent(Intent.ACTION_OPEN_DOCUMENT_TREE);
-        intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION | Intent.FLAG_GRANT_WRITE_URI_PERMISSION | Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION);
-        startActivityForResult(intent, PICK_GAME_FOLDER);
-    }
-
-    @Override protected void onActivityResult(int requestCode, int resultCode, @Nullable Intent data) {
-        super.onActivityResult(requestCode, resultCode, data);
-        if (requestCode != PICK_GAME_FOLDER || resultCode != Activity.RESULT_OK || data == null || data.getData() == null) return;
-        Uri tree = data.getData();
+    private void onStormActivityResult(int requestCode, int resultCode, @Nullable Intent data) {
+        if (requestCode != STORM_PICK_GAME_FOLDER || resultCode != Activity.RESULT_OK || data == null || data.getData() == null) return;
+        android.net.Uri tree = data.getData();
         try {
             getContentResolver().takePersistableUriPermission(tree, data.getFlags() & (Intent.FLAG_GRANT_READ_URI_PERMISSION | Intent.FLAG_GRANT_WRITE_URI_PERMISSION));
-            status.setText("Menyalin file game ke penyimpanan aplikasi...");
+            stormStatus.setText("Menyalin file game ke penyimpanan aplikasi...");
             new Thread(() -> {
                 try {
-                    File destination = new File(getExternalFilesDir(null), "StormGame");
-                    deleteTree(destination);
+                    java.io.File destination = new java.io.File(getExternalFilesDir(null), "StormGame");
+                    deleteStormTree(destination);
                     if (!destination.mkdirs() && !destination.isDirectory()) throw new Exception("Tidak bisa membuat folder game.");
-                    String rootId = DocumentsContract.getTreeDocumentId(tree);
-                    copyDocumentTree(tree, rootId, destination);
-                    File exe = findExe(destination);
-                    if (exe == null || !isPe32(exe)) throw new Exception("NSUNSR.exe PE32 x86 tidak ditemukan di folder game.");
+                    copyStormTree(tree, android.provider.DocumentsContract.getTreeDocumentId(tree), destination);
+                    java.io.File exe = findStormExe(destination);
+                    if (exe == null || !isStormPe32(exe)) throw new Exception("NSUNSR.exe PE32 x86 tidak ditemukan.");
                     runOnUiThread(() -> {
-                        gameDirectory = destination;
-                        status.setText("GAME READY\nNSUNSR.exe terdeteksi dan PE32 x86 valid.");
+                        stormGameDirectory = destination;
+                        stormStatus.setText("GAME READY\\nNSUNSR.exe terdeteksi dan PE32 x86 valid.");
                     });
                 } catch (Exception e) {
-                    runOnUiThread(() -> status.setText("Gagal menyiapkan game: " + e.getMessage()));
+                    runOnUiThread(() -> stormStatus.setText("Gagal menyiapkan game: " + e.getMessage()));
                 }
             }).start();
         } catch (Exception e) {
-            status.setText("Izin folder gagal: " + e.getMessage());
+            stormStatus.setText("Izin folder gagal: " + e.getMessage());
         }
     }
 
-    private void copyDocumentTree(Uri tree, String parentId, File destination) throws Exception {
-        Uri children = DocumentsContract.buildChildDocumentsUriUsingTree(tree, parentId);
-        String[] columns = {DocumentsContract.Document.COLUMN_DOCUMENT_ID, DocumentsContract.Document.COLUMN_DISPLAY_NAME, DocumentsContract.Document.COLUMN_MIME_TYPE};
-        try (Cursor cursor = getContentResolver().query(children, columns, null, null, null)) {
+    private void copyStormTree(android.net.Uri tree, String parentId, java.io.File destination) throws Exception {
+        android.net.Uri children = android.provider.DocumentsContract.buildChildDocumentsUriUsingTree(tree, parentId);
+        String[] columns = {android.provider.DocumentsContract.Document.COLUMN_DOCUMENT_ID, android.provider.DocumentsContract.Document.COLUMN_DISPLAY_NAME, android.provider.DocumentsContract.Document.COLUMN_MIME_TYPE};
+        try (android.database.Cursor cursor = getContentResolver().query(children, columns, null, null, null)) {
             if (cursor == null) throw new Exception("Folder game tidak dapat dibaca.");
             while (cursor.moveToNext()) {
-                String id = cursor.getString(0);
-                String name = cursor.getString(1);
-                String mime = cursor.getString(2);
+                String id = cursor.getString(0), name = cursor.getString(1), mime = cursor.getString(2);
                 if (name == null || name.contains("/") || name.equals(".") || name.equals("..")) continue;
-                File out = new File(destination, name);
-                if (DocumentsContract.Document.MIME_TYPE_DIR.equals(mime)) {
+                java.io.File out = new java.io.File(destination, name);
+                if (android.provider.DocumentsContract.Document.MIME_TYPE_DIR.equals(mime)) {
                     if (!out.mkdirs() && !out.isDirectory()) throw new Exception("Gagal membuat folder " + name);
-                    copyDocumentTree(tree, id, out);
+                    copyStormTree(tree, id, out);
                 } else {
-                    Uri document = DocumentsContract.buildDocumentUriUsingTree(tree, id);
-                    try (InputStream in = getContentResolver().openInputStream(document);
-                         FileOutputStream stream = new FileOutputStream(out)) {
+                    android.net.Uri document = android.provider.DocumentsContract.buildDocumentUriUsingTree(tree, id);
+                    try (java.io.InputStream in = getContentResolver().openInputStream(document);
+                         java.io.FileOutputStream stream = new java.io.FileOutputStream(out)) {
                         if (in == null) throw new Exception("Tidak dapat membaca " + name);
-                        byte[] buffer = new byte[1024 * 256];
-                        int count;
-                        while ((count = in.read(buffer)) != -1) stream.write(buffer, 0, count);
+                        byte[] buffer = new byte[262144];
+                        int n;
+                        while ((n = in.read(buffer)) != -1) stream.write(buffer, 0, n);
                     }
                 }
             }
         }
     }
 
-    private File findExe(File dir) {
+    private java.io.File findStormExe(java.io.File dir) {
         if (dir == null || !dir.isDirectory()) return null;
-        File direct = new File(dir, "NSUNSR.exe");
+        java.io.File direct = new java.io.File(dir, "NSUNSR.exe");
         if (direct.isFile()) return direct;
-        File[] files = dir.listFiles();
-        if (files != null) for (File f : files) {
-            if (f.isDirectory()) {
-                File found = findExe(f);
-                if (found != null) return found;
-            }
+        java.io.File[] files = dir.listFiles();
+        if (files != null) for (java.io.File f : files) if (f.isDirectory()) {
+            java.io.File found = findStormExe(f);
+            if (found != null) return found;
         }
         return null;
     }
 
-    private boolean isPe32(File file) {
-        try (RandomAccessFile raf = new RandomAccessFile(file, "r")) {
+    private boolean isStormPe32(java.io.File file) {
+        try (java.io.RandomAccessFile raf = new java.io.RandomAccessFile(file, "r")) {
             if (raf.length() < 128 || raf.readUnsignedByte() != 'M' || raf.readUnsignedByte() != 'Z') return false;
             raf.seek(0x3c);
             int offset = Integer.reverseBytes(raf.readInt());
@@ -222,79 +190,81 @@ public class MainActivity extends AppCompatActivity {
         } catch (Exception e) { return false; }
     }
 
-    private void launchGame() {
-        if (gameDirectory == null) {
-            status.setText("Pilih folder game terlebih dahulu.");
+    private void launchStormGame() {
+        if (stormGameDirectory == null) {
+            stormStatus.setText("Pilih folder game terlebih dahulu.");
             return;
         }
-        RootFS root = RootFS.find(this);
-        if (!root.isValid()) {
-            status.setText("Komponen sistem Wine sedang dipasang. Tunggu selesai, lalu tekan Jalankan Naruto.");
-            RootFSInstaller.installIfNeeded(this);
+        if (!com.winlator.xenvironment.RootFS.find(this).isValid()) {
+            stormStatus.setText("Komponen Wine sedang dipasang. Tunggu selesai, lalu tekan Jalankan Naruto.");
+            com.winlator.xenvironment.RootFSInstaller.installIfNeeded(this);
             return;
         }
-        File exe = findExe(gameDirectory);
-        if (exe == null || !isPe32(exe)) {
-            status.setText("NSUNSR.exe tidak valid. Pilih ulang folder game.");
+        java.io.File exe = findStormExe(stormGameDirectory);
+        if (exe == null || !isStormPe32(exe)) {
+            stormStatus.setText("NSUNSR.exe tidak valid. Pilih ulang folder game.");
             return;
         }
-        Container existing = null;
-        for (Container c : containers.getContainers()) if ("Storm Naruto".equals(c.getName())) existing = c;
-        if (existing != null) {
-            configureAndStart(existing, exe);
+        com.winlator.container.Container found = null;
+        for (com.winlator.container.Container c : stormContainers.getContainers()) if ("Storm Naruto".equals(c.getName())) found = c;
+        if (found != null) {
+            configureAndStartStorm(found, exe);
             return;
         }
         try {
-            JSONObject config = new JSONObject();
+            org.json.JSONObject config = new org.json.JSONObject();
             config.put("name", "Storm Naruto");
             config.put("screenSize", "960x540");
-            config.put("envVars", Container.DEFAULT_ENV_VARS + " DXVK_ASYNC=1");
-            config.put("graphicsDriver", GraphicsDrivers.VORTEK + "," + GraphicsDrivers.GLADIO);
-            config.put("dxwrapper", DXWrappers.DXVK);
-            config.put("audioDriver", AudioDrivers.PULSEAUDIO);
-            config.put("drives", "E:" + gameDirectory.getAbsolutePath());
-            config.put("box64Preset", Box64Preset.PERFORMANCE);
-            config.put("startupSelection", Container.STARTUP_SELECTION_ESSENTIAL);
-            config.put("wincomponents", Container.DEFAULT_WINCOMPONENTS);
-            containers.createContainerAsync(config, container -> {
+            config.put("envVars", com.winlator.container.Container.DEFAULT_ENV_VARS + " DXVK_ASYNC=1");
+            config.put("graphicsDriver", com.winlator.container.GraphicsDrivers.VORTEK + "," + com.winlator.container.GraphicsDrivers.GLADIO);
+            config.put("dxwrapper", com.winlator.container.DXWrappers.DXVK);
+            config.put("audioDriver", com.winlator.container.AudioDrivers.PULSEAUDIO);
+            config.put("drives", "E:" + stormGameDirectory.getAbsolutePath());
+            config.put("box64Preset", com.winlator.box64.Box64Preset.PERFORMANCE);
+            config.put("startupSelection", com.winlator.container.Container.STARTUP_SELECTION_ESSENTIAL);
+            config.put("wincomponents", com.winlator.container.Container.DEFAULT_WINCOMPONENTS);
+            stormContainers.createContainerAsync(config, container -> {
                 if (container == null) {
-                    status.setText("Gagal membuat profil Wine. Periksa instalasi runtime.");
+                    stormStatus.setText("Gagal membuat profil Wine.");
                     return;
                 }
-                configureAndStart(container, exe);
+                configureAndStartStorm(container, exe);
             });
-            status.setText("Menyiapkan prefix Wine pertama kali...");
+            stormStatus.setText("Menyiapkan prefix Wine pertama kali...");
         } catch (Exception e) {
-            status.setText("Gagal membuat konfigurasi: " + e.getMessage());
+            stormStatus.setText("Gagal membuat konfigurasi: " + e.getMessage());
         }
     }
 
-    private void configureAndStart(Container container, File exe) {
+    private void configureAndStartStorm(com.winlator.container.Container container, java.io.File exe) {
         container.setName("Storm Naruto");
         container.setScreenSize("960x540");
-        container.setGraphicsDriver(GraphicsDrivers.VORTEK + "," + GraphicsDrivers.GLADIO);
-        container.setDXWrapper(DXWrappers.DXVK);
-        container.setAudioDriver(AudioDrivers.PULSEAUDIO);
-        container.setBox64Preset(Box64Preset.PERFORMANCE);
-        container.setCPUList(Container.getFallbackCPUList());
-        container.setCPUListWoW64(Container.getFallbackCPUList());
-        container.setDrives("E:" + gameDirectory.getAbsolutePath());
-        container.setEnvVars(Container.DEFAULT_ENV_VARS + " DXVK_ASYNC=1");
+        container.setGraphicsDriver(com.winlator.container.GraphicsDrivers.VORTEK + "," + com.winlator.container.GraphicsDrivers.GLADIO);
+        container.setDXWrapper(com.winlator.container.DXWrappers.DXVK);
+        container.setAudioDriver(com.winlator.container.AudioDrivers.PULSEAUDIO);
+        container.setBox64Preset(com.winlator.box64.Box64Preset.PERFORMANCE);
+        container.setCPUList(com.winlator.container.Container.getFallbackCPUList());
+        container.setCPUListWoW64(com.winlator.container.Container.getFallbackCPUList());
+        container.setDrives("E:" + stormGameDirectory.getAbsolutePath());
+        container.setEnvVars(com.winlator.container.Container.DEFAULT_ENV_VARS + " DXVK_ASYNC=1");
         container.saveData();
-        Intent intent = new Intent(this, XServerDisplayActivity.class);
+        android.content.Intent intent = new android.content.Intent(this, XServerDisplayActivity.class);
         intent.putExtra("container_id", container.id);
         intent.putExtra("exec_path", exe.getAbsolutePath());
-        status.setText("Membuka runtime Naruto...");
+        stormStatus.setText("Membuka runtime Naruto...");
         startActivity(intent);
     }
 
-    private void deleteTree(File file) {
+    private void deleteStormTree(java.io.File file) {
         if (file == null || !file.exists()) return;
-        File[] children = file.listFiles();
-        if (children != null) for (File child : children) deleteTree(child);
+        java.io.File[] children = file.listFiles();
+        if (children != null) for (java.io.File child : children) deleteStormTree(child);
         file.delete();
     }
-}
-'''
-launcher.write_text(java, encoding="utf-8")
-print("Storm-first launcher patch applied.")
+"""
+if source.count(class_needle) != 1:
+    throw new Error("MainActivity class declaration mismatch");
+source = source.replace(class_needle, class_needle + methods, 1);
+launcher.write_text(source, encoding="utf-8")
+print("Storm launcher patched while preserving upstream MainActivity API.")
+
