@@ -3,13 +3,13 @@ project(stormcore)
 
 add_library(stormcore SHARED native-lib.cpp)
 
-find_library(android-lib android)
-find_library(vulkan-lib vulkan)
-if(NOT android-lib)
+find_library(ANDROID_LIB android)
+find_library(VULKAN_LIB vulkan)
+if(NOT ANDROID_LIB)
     message(FATAL_ERROR "Android native library not found in NDK toolchain")
 endif()
-if(NOT vulkan-lib)
+if(NOT VULKAN_LIB)
     message(FATAL_ERROR "Android Vulkan loader library not found in NDK toolchain")
 endif()
 
-target_link_libraries(stormcore ${android-lib} ${vulkan-lib})
+target_link_libraries(stormcore PRIVATE ${ANDROID_LIB} ${VULKAN_LIB})
