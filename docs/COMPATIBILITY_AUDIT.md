@@ -1,95 +1,102 @@
 # Compatibility Audit — Storm Runtime Naruto
 
-Audit basis: current main branch after JVM/NDK build fixes, expanded Vulkan probing, and PE32 executable inspection.
+Audit scope: repository state at commit `685e111249a48719dbe23b4d21d8877b6d49820e`, plus the subsequent CI hardening commit that verifies the ARM64 JNI library inside the APK.
 
-## Current architecture
+## Verified Android build
+
+- Commit tested by the successful baseline build: `685e111249a48719dbe23b4d21d8877b6d49820e`.
+- Workflow run: [45693296903](https://github.com/suksesjt12-source/StormRuntimeNaruto/actions/runs/45693296903).
+- Conclusion: `success`.
+- Job steps: Java 17, Android SDK packages, NDK/CMake install, Gradle build, APK verification and artifact upload all completed successfully.
+- Artifact: `storm-runtime-naruto-debug`, artifact ID `15059108725`, size 1,110,636 bytes, SHA-256 `0a411e9fcb5bd24622cd6e57e62df1f576c966718560e3da1e2e9114e0b72253`.
+- Artifact expiry: 2027-02-23.
+- Package configured by Gradle: `id.stormruntime.naruto`.
+- ABI configured by Gradle: `arm64-v8a`.
+
+The baseline workflow checked that an APK existed and that its package ID matched. A subsequent workflow change additionally checks the APK's advertised native ABI and the presence of `lib/arm64-v8a/libstormcore.so`, and records the APK SHA-256. That strengthened workflow must itself pass on its resulting commit before those new checks are considered verified.
+
+## Current application architecture
 
 The application is a Kotlin Android Activity with an ARM64 JNI C++ shared library. It can request a game folder through Android's Storage Access Framework, inspect the root-level `NSUNSR.exe`, and parse its DOS/PE headers to check whether it is a Windows PE32/i386 executable. The native library queries Android Vulkan for physical devices, graphics queue families, selected device features, and the advertised swapchain extension.
 
-## Current source-level implementation
+Source implementation is not equivalent to a successful Android device test. The PE parser validates a header; it does not load or execute the executable. Vulkan instance/device discovery does not create an Android surface or swapchain and does not prove D3D9 compatibility.
 
-| Layer | State | Evidence |
-|---|---|---|
-| Android ARM64 app | Implemented in source | Gradle ABI filter is `arm64-v8a` |
-| Java/Kotlin bytecode target | Aligned to JVM 17 | Gradle compile options and Kotlin target |
-| NDK | Pinned to 27.2.12479018 | `ndkVersion` |
-| JNI native library | Implemented in source | `System.loadLibrary("stormcore")` and native calls |
-| Game folder selection | Implemented | SAF tree picker |
-| Executable format inspection | Implemented in source | Checks MZ, PE signature, machine `0x014c`, optional header `0x010b` |
-| Vulkan discovery | Implemented in source | Creates instance, enumerates physical devices, queue families, device features and `VK_KHR_swapchain` |
-| APK CI | Configured | SDK, NDK, CMake, Gradle, package check, artifact upload |
+## Hangover/Wine ARM64 audit
 
-Source-level implementation is not equivalent to a successful Android device test. The executable parser only validates file format; it does not load or run the game.
-
-## Runtime architecture research
-
-### Preferred candidate: Hangover + Wine WoW64
-
-The Hangover project documents running i386 and x86_64 Windows PE applications on ARM64 Wine using emulator DLLs. Its documented 32-bit choices include FEX's `libwow64fex.dll` and Box64's `wowbox64.dll`. This is a more relevant architecture for 32-bit Windows PE applications than treating Box86 as a standalone Windows emulator.
-
-Official project: https://github.com/AndreRH/hangover
-
-The Termux package recipe for Hangover is an important Android ARM64 reference:
-https://github.com/termux/termux-packages/tree/master/x11-packages/hangover-wine
-
-However, the current Termux recipe configures Wine with X11, PulseAudio, SDL2 and Vulkan dependencies and explicitly disables `wineandroid_drv`. It is therefore not a drop-in native Android Activity runtime. An integrated display/input/audio bridge or a different Wine Android driver build is still required. The Termux package also has a large dependency graph and must be built and packaged with its corresponding Termux environment conventions.
-
-### Box86 assessment
-
-Box86 is not selected as the primary translator for this Android ARM64 app. Upstream Box86 describes itself as an x86 Linux userspace emulator, requires a 32-bit ARM host userspace and its associated libraries, and is intended to run x86 Linux programs such as x86 Wine. It is not by itself a translator for a Windows PE executable.
+Hangover is the strongest candidate identified for this target because its upstream project describes running Win32 and Win64 Windows applications on ARM64 Linux using Wine and architecture-translation components.
 
 References:
-- https://github.com/ptitSeb/box86
-- https://github.com/ptitSeb/box86/blob/master/docs/README.md
-- https://github.com/ptitSeb/box86/blob/master/docs/COMPILE.md
+- Hangover upstream: https://github.com/AndreRH/hangover
+- Termux package recipe: https://github.com/termux/termux-packages/tree/master/x11-packages/hangover-wine
+- Recipe source: https://raw.githubusercontent.com/termux/termux-packages/master/x11-packages/hangover-wine/build.sh
 
-Hangover's ARM64 WoW64 integration with FEX or Box64's WOW64 DLL is the more direct candidate for an i386 Windows PE process.
+The inspected Termux recipe currently packages Hangover Wine 11.16 and configures `--enable-archs=i386,aarch64,arm64ec`. It installs the Hangover translator DLL packages `wowbox64`, `libwow64fex`, and `libarm64ecfex`. This confirms that Box64 WOW64 and FEX-based WoW64 are actual Hangover integration paths, rather than assuming Box86 is a Windows PE loader.
 
-### DXVK / Mali assessment
+Important Android integration blocker: the recipe sets `enable_wineandroid_drv=no`. It uses Termux-specific dependencies and a Linux/X11-oriented stack including XCB/XRandR, SDL2, PulseAudio and Vulkan. It is not a ready-made Android Activity runtime. Simply copying its libraries into an APK would not supply the missing Android window/display driver, Android surface lifecycle, input forwarding, audio integration, prefix setup, dynamic-library search paths, or process lifecycle management.
 
-DXVK is a Direct3D 8/9/10/11-to-Vulkan translation layer and provides both x32 and x64 DLLs. The upstream driver support page states that legacy DXVK 1.10.3 requires a Vulkan 1.1-capable driver; later DXVK branches require newer Vulkan versions and additional extensions/features. Upstream explicitly does not provide first-party support for Android/mobile graphics drivers.
+The recipe is also tied to Termux's Bionic environment and package layout. Its packages cannot be assumed binary-compatible with arbitrary Android NDK packaging. A proper integration requires a reproducible build against the intended Android ABI, a validated Android display path, and licensing/notice handling. No Wine/Hangover binary has been built, packaged, loaded, or initialized in this repository.
 
-References:
-- https://github.com/doitsujin/dxvk
-- https://github.com/doitsujin/dxvk/wiki/Driver-support
+## Windows PE32/i386 execution
 
-The app's Vulkan diagnostic is only an initial capability probe. It does not yet validate every extension, feature, memory requirement, presentation path, or synchronization behavior required by DXVK. Mali-G57 compatibility remains unverified until tested on the actual device.
+- The target executable is a 32-bit Windows PE, not an x86 Linux ELF.
+- Box86 is an x86 Linux userspace emulator and is not, by itself, a Windows PE compatibility runtime.
+- Hangover's WoW64 emulator DLL route (Box64 WOW64 or FEX) is the candidate to test after Wine ARM64 is built and initialized.
+- A valid test must execute a small Windows PE32 program under the packaged Wine/Hangover runtime and capture its Windows API calls and exit status. A Linux x86 test binary is not sufficient evidence.
 
-## Compatibility matrix
+No Windows PE32 program has yet been executed by this app.
 
-| Layer | Current state | Evidence / blocker |
+## Direct3D 9 / Vulkan / Mali
+
+DXVK translates Direct3D 8/9/10/11 to Vulkan. It still requires a supported Vulkan driver and a working presentation path. The current JNI probe does not test:
+- Android `VkSurfaceKHR` creation;
+- presentation support for the selected graphics queue;
+- swapchain creation/acquisition/presentation;
+- all DXVK-required Vulkan extensions/features;
+- shader compilation through the actual DXVK device;
+- D3D9 device creation.
+
+The target Mali-G57 MC2 has not been tested by this app. Upstream DXVK does not provide a blanket guarantee for Android/mobile GPU drivers. DXVK and D3D9 remain unintegrated and unverified.
+
+Reference: https://github.com/doitsujin/dxvk and https://github.com/doitsujin/dxvk/wiki/Driver-support
+
+## Current source-level components
+
+| Component | State | Evidence / limitation |
 |---|---|---|
-| Android ARM64 app | Implemented in source | APK build must pass |
-| JNI native loading | Implemented in source | Device test pending |
-| PE32/i386 inspection | Implemented in source | Device test and real game-file inspection pending |
-| Vulkan device probe | Implemented in source | Device test pending |
-| Wine / Win32 API | Not integrated | Hangover identified as candidate; Android packaging/display bridge not implemented |
-| x86 32-bit Windows execution | Not integrated | Hangover i386 WoW64 emulator DLL not built or packaged |
-| D3D9 / DXVK | Not integrated | Vulkan feature validation and Android presentation path absent |
-| Audio | Not integrated | Wine audio backend and Android bridge absent |
-| Input | Not integrated | Windows input forwarding absent |
-| Game process manager | Not implemented | No real Wine process lifecycle |
-| Target game | Not tested | No game execution evidence or device test session |
+| Android ARM64 launcher | Implemented in source | Kotlin Activity, Gradle ABI filter |
+| JVM target | Configured | Java and Kotlin target 17 |
+| Android NDK | Pinned | 27.2.12479018 |
+| CMake native library | Implemented in source | `stormcore` shared library |
+| JNI bridge | Implemented in source | `System.loadLibrary("stormcore")` and JNI methods |
+| Game folder selection | Implemented in source | SAF tree picker |
+| PE32/i386 inspection | Implemented in source | MZ, PE signature, machine `0x014c`, optional magic `0x010b` |
+| Vulkan capability probe | Implemented in source | Instance, physical devices, queue family, selected features/extensions |
+| Wine/Hangover | Not integrated | Android-native display/audio/input path absent |
+| WoW64 translator | Not integrated | No translator DLL packaged or loaded |
+| D3D9/DXVK | Not integrated | No D3D9 device or swapchain test |
+| Audio/input forwarding | Not integrated | No Windows-to-Android bridge |
+| Windows process manager | Not implemented | No Wine process lifecycle |
+| Original game | Not tested | No launch/menu/gameplay evidence |
 
-## Latest known CI failure and fix
+## Test matrix
 
-The previous run failed at `compileDebugKotlin` with:
-`Inconsistent JVM-target compatibility detected for tasks 'compileDebugJavaWithJavac' (1.8) and 'compileDebugKotlin' (17).`
+Statuses below are deliberately evidence-based. The CI result is for the exact commit listed; physical-device and Windows-runtime tests have not been performed.
 
-The Gradle configuration has now been updated to set Java source/target compatibility and Kotlin `jvmTarget` to 17, and to pin NDK 27.2.12479018. A new workflow run is required to confirm this fix.
+| Test | Status | Commit / environment | Evidence or blocker |
+|---|---|---|---|
+| A. APK build | PASS | `685e111`, GitHub Actions Ubuntu runner | Run 45693296903 completed successfully |
+| B. APK install/open | NOT TESTED | Infinix Hot 50 4G / Android 14 | No device installation session or logcat |
+| C. JNI library load | NOT TESTED | Target Android device | JNI source is present; no device runtime evidence |
+| D. Vulkan device detection | NOT TESTED | Mali-G57 MC2 | Probe is compiled in source; no target-device output |
+| E. Vulkan surface/swapchain | BLOCKED | Android surface + Vulkan | No ANativeWindow surface/swapchain implementation |
+| F. Wine initialization | BLOCKED | ARM64 Android | Hangover not built or packaged; Termux recipe disables wineandroid driver |
+| G. Windows PE32 x86 execution | BLOCKED | ARM64 WoW64 | No Wine runtime or WoW64 emulator DLL integrated |
+| H. Direct3D 9 initialization | BLOCKED | Vulkan/Mali | DXVK and Android presentation path absent |
+| I. Audio/input forwarding | BLOCKED | Android audio/input | No Windows API bridge |
+| J. NSUNSR.exe launch | BLOCKED | Original game folder | No Windows process runtime |
+| K. Main menu | NOT TESTED | Target Android device | Executable cannot currently be launched |
+| L. Gameplay | NOT TESTED | Target Android device | No end-to-end execution |
 
-## Honest staged test status
+## Required next engineering milestone
 
-- Test A (APK build): pending confirmation from the latest workflow.
-- Test B (install and open on Android): NOT TESTED.
-- Test C (native library load on device): source path implemented; device test pending.
-- Test D (Vulkan device detection on target phone): NOT TESTED.
-- Test E (Wine initialization): BLOCKED; Hangover candidate researched but not integrated.
-- Test F (x86-32 PE execution): BLOCKED; translator DLL not built or integrated.
-- Test G (Direct3D 9 initialization): BLOCKED; DXVK and Android presentation integration absent.
-- Test H (audio and input): BLOCKED; integration absent.
-- Test I (launch NSUNSR.exe): BLOCKED.
-- Test J (main menu): NOT TESTED.
-- Test K (gameplay): NOT TESTED.
-
-A successful APK build must not be reported as successful Windows runtime or game compatibility.
+Do not add a Start Game action that implies capability. The next meaningful milestone is a separate, reproducible Hangover/Wine ARM64 build-and-load experiment, with a minimal Android-native display/input/audio strategy chosen before packaging. Only after Wine initializes should the project add and test the i386 WoW64 DLL, then a legal minimal Windows PE32 test program, then D3D9/DXVK surface presentation. The commercial game remains the final compatibility test, not the first test.
