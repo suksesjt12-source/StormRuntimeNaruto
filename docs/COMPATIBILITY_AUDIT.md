@@ -59,11 +59,21 @@ Hangover's upstream README notes that DXVK requires a Vulkan 1.3 driver with req
 
 No Wine process manager is integrated. There is no actual Windows process launcher, process handle, wait/status/exit-code bridge, Wine prefix manager, or Wine log capture in the Android app. No Windows audio API forwarding to AAudio/OpenSL ES is implemented. No keyboard, mouse, touchscreen, or gamepad events are forwarded to a Windows process. The launcher must continue to report these capabilities as unavailable.
 
+## Latest HEAD verification (2026-11-26)
+
+- Current `main` HEAD: `1785d892191afab604269c2d2766c949fb56635f`.
+- Android APK workflow run: [45695915175](https://github.com/suksesjt12-source/StormRuntimeNaruto/actions/runs/45695915175), conclusion `success`, built from the exact HEAD above.
+- APK artifact: `storm-runtime-naruto-debug`, artifact ID `15061880365`, size 1,121,084 bytes, expires 2027-02-23.
+- APK SHA-256 (computed by the workflow): `ca8f2ab769e45e27fc7da3f214916c0806fd41fd8f13893faf0b45af4554ae30`.
+- The workflow log confirms `BUILD SUCCESSFUL`, package `id.stormruntime.naruto`, ABI `arm64-v8a`, and `lib/arm64-v8a/libstormcore.so` in the APK.
+- Artifact archive digest reported by GitHub: `sha256:10fcfac5dc90d36f1a21f2a69342c244a61718cf9da25377b9919dac2e6dbb04` (this is the ZIP artifact digest, not the APK SHA-256 above).
+- APK artifact download: https://github.com/suksesjt12-source/StormRuntimeNaruto/actions/runs/45695915175/artifacts/15061880365
+
 ## Evidence-based test matrix
 
 | Test | Status | Evidence / reason |
 |---|---|---|
-| A. APK build | PASS on commit `c61a59d`; newer CMake hardening build pending | Android run 45695581298 uploaded an APK artifact. Confirm the final run for the current HEAD before treating it as current-head evidence. |
+| A. APK build | PASS | Commit `1785d892191afab604269c2d2766c949fb56635f`; run `45695915175`; Ubuntu GitHub Actions; APK SHA-256 recorded above. |
 | B. APK install/open | NOT TESTED | No physical Android installation session or logcat. |
 | C. JNI loaded on device | NOT TESTED | CI packages the ARM64 library; no device runtime log. |
 | D. Vulkan device detected on Mali | NOT TESTED | Probe is implemented, but no target-device output. |
