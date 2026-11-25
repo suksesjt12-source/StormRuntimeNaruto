@@ -2,7 +2,7 @@ name: Android APK Build
 on:
   workflow_dispatch:
   push:
-    branches: ["main"]
+    branches: ["main", "experiment/wine-hangover-android"]
 
 permissions:
   contents: read
