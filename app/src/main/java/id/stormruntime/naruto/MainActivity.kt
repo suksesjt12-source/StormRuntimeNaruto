@@ -26,6 +26,7 @@ class MainActivity : Activity(), SurfaceHolder.Callback {
     private var installInProgress = false
     private var pendingArchiveUri: Uri? = null
     private var pendingArchiveIsProot = false
+    private var pendingArchiveIsCompat = false
     private lateinit var runtimeClient: StormRuntimeClient
     private var selectedTree: Uri? = null
 
@@ -34,6 +35,7 @@ class MainActivity : Activity(), SurfaceHolder.Callback {
         private const val PICK_PROOT_ARCHIVE = 4102
         private const val PICK_ROOTFS_ARCHIVE = 4103
         private const val PICK_RUNTIME_CHECKSUM = 4104
+        private const val PICK_COMPAT_ARCHIVE = 4105
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -120,6 +122,7 @@ class MainActivity : Activity(), SurfaceHolder.Callback {
         panel.addView(label("Pemasangan runtime", 20f))
         panel.addView(button("Pilih arsip PRoot ARM64 (.tar.gz)") { pickRuntimeArchive(PICK_PROOT_ARCHIVE) })
         panel.addView(button("Pilih arsip Glibc RootFS (.tar.xz)") { pickRuntimeArchive(PICK_ROOTFS_ARCHIVE) })
+        panel.addView(button("Pilih paket Wine + Box64 + Hangover (.tar.gz/.tar.xz)") { pickRuntimeArchive(PICK_COMPAT_ARCHIVE) })
         installerStatus = label("Installer: belum ada paket yang dipasang.")
         panel.addView(installerStatus)
 
@@ -174,9 +177,10 @@ class MainActivity : Activity(), SurfaceHolder.Callback {
         startActivityForResult(intent, requestCode)
     }
 
-    private fun requestChecksumFor(archive: Uri, isProot: Boolean) {
+    private fun requestChecksumFor(archive: Uri, isProot: Boolean, isCompat: Boolean = false) {
         pendingArchiveUri = archive
         pendingArchiveIsProot = isProot
+        pendingArchiveIsCompat = isCompat
         installerStatus.text = "Pilih file checksum .sha256 yang berasal dari paket yang sama."
         val intent = Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
             addCategory(Intent.CATEGORY_OPENABLE)
@@ -186,13 +190,16 @@ class MainActivity : Activity(), SurfaceHolder.Callback {
         startActivityForResult(intent, PICK_RUNTIME_CHECKSUM)
     }
 
-    private fun installRuntimeArchive(uri: Uri, checksumUri: Uri, isProot: Boolean) {
+    private fun installRuntimeArchive(uri: Uri, checksumUri: Uri, isProot: Boolean, isCompat: Boolean) {
         if (installInProgress) return
         installInProgress = true
         installerStatus.text = if (isProot) "Memverifikasi SHA-256 dan memasang PRoot ARM64..." else "Memverifikasi SHA-256 dan memasang Glibc RootFS..."
         installerExecutor.execute {
-            val result = if (isProot) StormRuntimePackageInstaller.installProot(this, uri, checksumUri)
-                else StormRuntimePackageInstaller.installRootfs(this, uri, checksumUri)
+            val result = when {
+                isProot -> StormRuntimePackageInstaller.installProot(this, uri, checksumUri)
+                isCompat -> StormRuntimePackageInstaller.installCompatibility(this, uri, checksumUri)
+                else -> StormRuntimePackageInstaller.installRootfs(this, uri, checksumUri)
+            }
             runOnUiThread {
                 installInProgress = false
                 pendingArchiveUri = null
@@ -214,11 +221,15 @@ class MainActivity : Activity(), SurfaceHolder.Callback {
     @Deprecated("Use Activity Result API in a later iteration")
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
         super.onActivityResult(requestCode, resultCode, data)
-        if (resultCode == RESULT_OK && requestCode in setOf(PICK_PROOT_ARCHIVE, PICK_ROOTFS_ARCHIVE)) {
+        if (resultCode == RESULT_OK && requestCode in setOf(PICK_PROOT_ARCHIVE, PICK_ROOTFS_ARCHIVE, PICK_COMPAT_ARCHIVE)) {
             val archive = data?.data ?: return
             val flags = data.flags and Intent.FLAG_GRANT_READ_URI_PERMISSION
             try { contentResolver.takePersistableUriPermission(archive, flags) } catch (_: SecurityException) { }
-            requestChecksumFor(archive, requestCode == PICK_PROOT_ARCHIVE)
+            requestChecksumFor(
+                archive,
+                requestCode == PICK_PROOT_ARCHIVE,
+                requestCode == PICK_COMPAT_ARCHIVE
+            )
             return
         }
         if (resultCode == RESULT_OK && requestCode == PICK_RUNTIME_CHECKSUM) {
@@ -226,7 +237,7 @@ class MainActivity : Activity(), SurfaceHolder.Callback {
             val archive = pendingArchiveUri ?: return
             val flags = data.flags and Intent.FLAG_GRANT_READ_URI_PERMISSION
             try { contentResolver.takePersistableUriPermission(checksum, flags) } catch (_: SecurityException) { }
-            installRuntimeArchive(archive, checksum, pendingArchiveIsProot)
+            installRuntimeArchive(archive, checksum, pendingArchiveIsProot, pendingArchiveIsCompat)
             return
         }
         if (requestCode == PICK_GAME_FOLDER && resultCode == RESULT_OK) {
