@@ -96,14 +96,19 @@ class MainActivity : Activity(), SurfaceHolder.Callback {
 
         panel.addView(label("Runtime backend", 20f))
         panel.addView(label("Backend utama: LauncherPC Core + GNU Glibc ARM64"))
-        panel.addView(label("Komponen kompatibilitas: Wine/Hangover + Box64 WoW64 + DXVK"))
-        panel.addView(label("Status: komponen runtime belum dipasang; peluncuran game tetap dikunci."))
+        panel.addView(label("Komponen kompatibilitas: Wine/Hangover + Box64 WoW64 + DXVK-Sarek 1.11.0"))
+        panel.addView(label("Status: DXVK-Sarek dipilih sebagai kandidat; belum dipasang atau dijalankan."))
 
         panel.addView(label("Profil perangkat", 20f))
-        val deviceInfo = StormRuntimeConfig.deviceSummary()
+        val deviceInfo = StormRuntimeConfig.deviceSummary(this)
         panel.addView(label(deviceInfo))
         panel.addView(label("Profil rekomendasi: " + StormRuntimeConfig.defaultProfile.summary))
         panel.addView(label("Catatan: nilai profil adalah konfigurasi awal yang ditampilkan, belum diterapkan ke proses game."))
+
+        panel.addView(label("DXVK-Sarek Vulkan 1.11 baseline diagnostic", 20f))
+        panel.addView(label(NativeBridge.dxvkSarekStatus()))
+        panel.addView(label("Catatan: probe ini memeriksa Vulkan 1.1, swapchain, dan queue. Uji Android surface/present tetap terpisah; belum membuktikan DLL DXVK atau D3D9 siap."))
+
         panel.addView(label("Android Vulkan surface diagnostic", 20f))
         surfaceStatus = label("Surface: menunggu SurfaceView dibuat")
         panel.addView(surfaceStatus)
@@ -245,7 +250,6 @@ class MainActivity : Activity(), SurfaceHolder.Callback {
                 }
                 output.toByteArray()
             } ?: throw IllegalStateException("File tidak dapat dibaca.")
-
             val peType = inspectPe32X86(bytes)
             val fileSize = exe.length()
             exeStatus.text = when (peType) {
@@ -276,6 +280,7 @@ object NativeBridge {
     init { System.loadLibrary("stormcore") }
     external fun status(): String
     external fun vulkanStatus(): String
+    external fun dxvkSarekStatus(): String
     external fun setAndroidSurface(surface: Surface): String
     external fun androidSurfaceStatus(): String
     external fun clearAndroidSurface()
