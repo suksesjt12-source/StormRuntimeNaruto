@@ -42,7 +42,7 @@ internal object StormRuntimeManifest {
 
         val properties = Properties()
         try {
-            manifest.inputStream().use(properties::load)
+            manifest.inputStream().use { input -> properties.load(input) }
         } catch (error: Exception) {
             return RuntimeValidation(
                 StormRuntimeProtocol.STATE_INCOMPLETE,
