@@ -27,4 +27,5 @@ object StormRuntimeProtocol {
     const val STATE_PROOT_TIMEOUT = "PROOT_TIMEOUT"
     const val STATE_PROOT_FAILED = "PROOT_FAILED"
     const val STATE_GLIBC_SMOKE_OK = "GLIBC_SMOKE_OK"
+    const val STATE_SMOKE_TEST_BUSY = "SMOKE_TEST_BUSY"
 }
