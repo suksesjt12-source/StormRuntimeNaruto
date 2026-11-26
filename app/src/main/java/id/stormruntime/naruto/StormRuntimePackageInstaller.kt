@@ -73,6 +73,7 @@ internal object StormRuntimePackageInstaller {
                 error("Tidak dapat mengaktifkan paket baru.")
             }
             backup.deleteRecursively()
+            writeBundleManifest(bundle)
             Result(true, "Paket $destinationName berhasil diekstrak dan dipasang di penyimpanan privat aplikasi.")
         } catch (error: Exception) {
             staging.deleteRecursively()
@@ -80,6 +81,46 @@ internal object StormRuntimePackageInstaller {
         }
     }
 
+
+    private fun writeBundleManifest(bundle: File) {
+        val rootfs = File(bundle, "rootfs")
+        val proot = File(bundle, "proot/root/bin/proot")
+        val compat = File(bundle, "compat")
+        val compatManifest = File(compat, "manifest.properties")
+        val props = java.util.Properties()
+        props.setProperty("format", "storm-runtime-bundle-v1")
+        props.setProperty("abi", "arm64-v8a")
+        props.setProperty("libc", "glibc")
+        props.setProperty("glibc.loader", "rootfs/lib/ld-linux-aarch64.so.1")
+        val libcCandidates = listOf(
+            "lib/aarch64-linux-gnu/libc.so.6",
+            "lib/libc.so.6",
+            "usr/lib/aarch64-linux-gnu/libc.so.6"
+        )
+        val libcPath = libcCandidates.firstOrNull { File(rootfs, it).isFile }
+            ?: libcCandidates.first()
+        props.setProperty("glibc.libc", "rootfs/$libcPath")
+        props.setProperty("proot", "proot/root/bin/proot")
+        if (compatManifest.isFile) {
+            val compatProps = java.util.Properties()
+            compatManifest.inputStream().use { compatProps.load(it) }
+            for (key in listOf("wine", "box64", "hangover.wow64_i386")) {
+                val relative = compatProps.getProperty(key)?.trim().orEmpty()
+                if (relative.isNotEmpty()) props.setProperty(key, "compat/$relative")
+            }
+        }
+        val temporary = File(bundle, "manifest.properties.tmp")
+        temporary.outputStream().use { props.store(it, "LauncherPC runtime bundle manifest") }
+        val destination = File(bundle, "manifest.properties")
+        if (destination.exists() && !destination.delete()) {
+            temporary.delete()
+            error("Tidak dapat mengganti manifest runtime.")
+        }
+        if (!temporary.renameTo(destination)) {
+            temporary.delete()
+            error("Tidak dapat mengaktifkan manifest runtime.")
+        }
+    }
 
     private fun readExpectedSha256(context: Context, uri: Uri): String {
         val bytes = context.contentResolver.openInputStream(uri)?.use { input ->
