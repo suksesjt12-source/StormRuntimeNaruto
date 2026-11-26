@@ -80,26 +80,36 @@ internal object StormProotHost {
         }
 
         val wine = resolveCompat("wine")
-        val box64 = resolveCompat("box64")
         val hangover = resolveCompat("hangover.wow64_i386")
-        val absent = listOf(
-            "wine" to wine, "box64" to box64, "hangover.wow64_i386" to hangover
-        ).filter { entry ->
-            val file = entry.second
-            file == null || !file.isFile || file.length() == 0L
-        }.map { entry -> "Komponen ${entry.first} belum tersedia atau path manifest tidak valid." }
+        val box64Declared = properties.getProperty("box64")?.trim().orEmpty().isNotEmpty()
+        val box64 = resolveCompat("box64")
+        val absent = mutableListOf<String>()
+        if (wine == null || !wine.isFile || wine.length() == 0L) {
+            absent += "Wine ARM64 ELF belum tersedia atau path manifest tidak valid."
+        }
+        if (hangover == null || !hangover.isFile || hangover.length() == 0L) {
+            absent += "Hangover wowbox64.dll belum tersedia atau path manifest tidak valid."
+        }
+        if (box64Declared && (box64 == null || !box64.isFile || box64.length() == 0L)) {
+            absent += "Box64 Linux ARM64 executable dideklarasikan tetapi tidak ditemukan."
+        }
         if (absent.isNotEmpty()) {
             return RuntimeValidation(StormRuntimeProtocol.STATE_COMPAT_MISSING, "Paket kompatibilitas belum lengkap.", absent)
         }
-        if (!isAarch64Elf(wine!!) || !isAarch64Elf(box64!!) || !isArm64PeDll(hangover!!)) {
+        if (!isAarch64Elf(wine!!) || !isArm64PeDll(hangover!!)) {
             return RuntimeValidation(
                 StormRuntimeProtocol.STATE_COMPAT_INVALID,
-                "Wine dan Box64 harus ELF64 AArch64; Hangover wowbox64.dll harus PE32+ ARM64."
+                "Wine harus ELF64 AArch64 dan Hangover wowbox64.dll harus PE32+ ARM64 (machine 0xAA64)."
+            )
+        }
+        if (box64 != null && (!isAarch64Elf(box64) || !box64.canExecute())) {
+            return RuntimeValidation(
+                StormRuntimeProtocol.STATE_COMPAT_INVALID,
+                "Box64 Linux executable opsional harus ELF64 AArch64 dan executable."
             )
         }
 
         val guestWine = "/opt/storm/compat/" + wine.relativeTo(compatRoot).invariantSeparatorsPath
-        val guestBox64 = "/opt/storm/compat/" + box64.relativeTo(compatRoot).invariantSeparatorsPath
         val wineResult = runGuestCommand(
             bundle, proot, prootLoader, rootfs, compatRoot,
             listOf(guestWine, "--version"),
@@ -115,24 +125,29 @@ internal object StormProotHost {
             )
         }
 
-        val box64Result = runGuestCommand(
-            bundle, proot, prootLoader, rootfs, compatRoot,
-            listOf(guestBox64, "--version"),
-            "storm-box64-version.log"
-        )
-        if (box64Result.timedOut) {
-            return RuntimeValidation(StormRuntimeProtocol.STATE_COMPAT_SMOKE_TIMEOUT, "Box64 --version melebihi batas waktu 30 detik.")
-        }
-        if (box64Result.exitCode != 0 || box64Result.output.isBlank()) {
-            return RuntimeValidation(
-                StormRuntimeProtocol.STATE_COMPAT_SMOKE_FAILED,
-                "Wine berhasil merespons, tetapi Box64 gagal memulai (exit ${box64Result.exitCode}). Output: ${box64Result.output.trim().take(700)}"
+        var box64Detail = "Box64 WoW64 terdeteksi sebagai Hangover wowbox64.dll (PE32+ ARM64); DLL belum dimuat oleh Wine."
+        if (box64 != null) {
+            val guestBox64 = "/opt/storm/compat/" + box64.relativeTo(compatRoot).invariantSeparatorsPath
+            val box64Result = runGuestCommand(
+                bundle, proot, prootLoader, rootfs, compatRoot,
+                listOf(guestBox64, "--version"),
+                "storm-box64-version.log"
             )
+            if (box64Result.timedOut) {
+                return RuntimeValidation(StormRuntimeProtocol.STATE_COMPAT_SMOKE_TIMEOUT, "Box64 --version melebihi batas waktu 30 detik.")
+            }
+            if (box64Result.exitCode != 0 || box64Result.output.isBlank()) {
+                return RuntimeValidation(
+                    StormRuntimeProtocol.STATE_COMPAT_SMOKE_FAILED,
+                    "Wine merespons, tetapi Box64 Linux executable gagal memulai (exit ${box64Result.exitCode}). Output: ${box64Result.output.trim().take(700)}"
+                )
+            }
+            box64Detail += "\\nBox64 CLI: ${box64Result.output.trim().take(200)}"
         }
 
         return RuntimeValidation(
             StormRuntimeProtocol.STATE_WINE_SMOKE_OK,
-            "Wine dan Box64 berhasil merespons --version di dalam PRoot/Glibc. Hangover bridge terdeteksi: ${hangover.relativeTo(bundle).invariantSeparatorsPath}. Ini belum menguji PE32/WoW64 atau game.\nWine: ${wineResult.output.trim().take(250)}\nBox64: ${box64Result.output.trim().take(250)}"
+            "Wine --version berhasil di dalam PRoot/Glibc. Hangover Box64 WoW64 DLL tervalidasi sebagai PE32+ ARM64, tetapi belum dimuat dan belum diuji menjalankan PE32.\\nWine: ${wineResult.output.trim().take(250)}\\n$box64Detail"
         )
     }
 
