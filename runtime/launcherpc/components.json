@@ -1,0 +1,68 @@
+{
+  "product": "LauncherPC",
+  "schemaVersion": 1,
+  "target": {
+    "abis": [
+      "arm64-v8a"
+    ],
+    "androidApi": 34,
+    "chipsets": [
+      "MediaTek Helio G99",
+      "MediaTek Helio G100"
+    ],
+    "gpu": "ARM Mali-G57 MC2",
+    "ramGiB": 8
+  },
+  "runtime": {
+    "androidHost": "bionic",
+    "linuxGuest": "debian-arm64-glibc",
+    "userspaceSupervisor": "proot",
+    "windowsCompatibility": [
+      "wine",
+      "hangover"
+    ],
+    "cpuTranslator": {
+      "name": "box64",
+      "baseline": "0.4.4",
+      "status": "candidate-pin-requires-source-build-and-ABI-validation"
+    }
+  },
+  "graphics": {
+    "selection": "capability-gated-per-game",
+    "maliWrapper": {
+      "sourceReference": "GunaCharanTeja/WinlatorMali",
+      "referenceRelease": "1.2.1",
+      "bcnEmulationCandidates": [
+        "ASTC",
+        "ETC2"
+      ],
+      "status": "source-audit-and-device-validation-required"
+    },
+    "dxvk": {
+      "preferredCandidate": "3.1.1",
+      "fallbackCandidates": [
+        "2.7.1",
+        "1.10.3"
+      ],
+      "status": "optional-until-vulkan-probe-passes",
+      "rule": "Never force a DXVK build whose Vulkan requirements are not met."
+    },
+    "fallback": "wined3d"
+  },
+  "performance": {
+    "initialResolution": "960x540",
+    "initialFrameCap": 30,
+    "thermalPolicy": "observe-and-adapt-no-clock-or-thermal-overrides",
+    "cachePolicy": "app-private-versioned-size-limited"
+  },
+  "validation": {
+    "physicalHelioG99": false,
+    "physicalHelioG100": false,
+    "android14Proot": false,
+    "maliVulkanPresentation": false,
+    "dxvkD3d9": false,
+    "pe32Wow64": false,
+    "narutoMainMenu": false,
+    "sustainedGameplay": false
+  }
+}
