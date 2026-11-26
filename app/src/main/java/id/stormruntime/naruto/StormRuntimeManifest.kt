@@ -26,8 +26,7 @@ internal object StormRuntimeManifest {
         "glibc.libc" to "GNU Glibc shared library",
         "proot" to "PRoot ARM64 executable",
         "wine" to "ARM64 Wine executable",
-        "box64" to "Box64 ARM64 executable",
-        "hangover.wow64_i386" to "Hangover i386 WoW64 translator"
+        "hangover.wow64_i386" to "Hangover Box64 WoW64 ARM64 DLL"
     )
 
     fun inspect(context: Context): RuntimeValidation {
@@ -81,6 +80,15 @@ internal object StormRuntimeManifest {
                 missing += "$label ($relative)"
             } else if (key in setOf("proot", "wine", "box64") && !file.canExecute()) {
                 missing += "$label (file belum executable: $relative)"
+            }
+        }
+
+        val optionalBox64 = properties.getProperty("box64")?.trim().orEmpty()
+        if (optionalBox64.isNotEmpty()) {
+            val box64File = resolveInside(bundle, optionalBox64)
+            if (box64File == null || !box64File.isFile || box64File.length() == 0L ||
+                !box64File.canExecute()) {
+                missing += "Box64 Linux ARM64 executable ($optionalBox64)"
             }
         }
 
