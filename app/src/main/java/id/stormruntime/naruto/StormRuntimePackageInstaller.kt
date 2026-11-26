@@ -29,7 +29,7 @@ internal object StormRuntimePackageInstaller {
     data class Result(val ok: Boolean, val detail: String)
 
     fun installProot(context: Context, archiveUri: Uri): Result =
-        install(context, archiveUri, "proot", "root", "storm-proot-install")
+        install(context, archiveUri, "proot/root", "root", "storm-proot-install")
 
     fun installRootfs(context: Context, archiveUri: Uri): Result =
         install(context, archiveUri, "rootfs", "rootfs", "storm-rootfs-install")
@@ -55,6 +55,7 @@ internal object StormRuntimePackageInstaller {
             validatePayload(staging, destinationName)
 
             if (!bundle.exists() && !bundle.mkdirs()) error("Tidak dapat membuat direktori runtime.")
+            destination.parentFile?.let { if (!it.exists() && !it.mkdirs()) error("Tidak dapat membuat direktori paket.") }
             if (destination.exists() && !destination.renameTo(backup)) {
                 error("Tidak dapat mencadangkan instalasi sebelumnya.")
             }
@@ -171,7 +172,7 @@ internal object StormRuntimePackageInstaller {
     }
 
     private fun validatePayload(staging: File, name: String) {
-        if (name == "proot") {
+        if (name.startsWith("proot/")) {
             val proot = File(staging, "bin/proot")
             val loader = File(staging, "libexec/proot/loader")
             require(proot.isFile && proot.length() > 0L) { "bin/proot tidak ditemukan." }
