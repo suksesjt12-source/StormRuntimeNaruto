@@ -124,14 +124,14 @@ class MainActivity : Activity(), SurfaceHolder.Callback {
         panel.addView(label("Pemasangan runtime", 20f))
         panel.addView(button("Pilih arsip PRoot ARM64 (.tar.gz)") { pickRuntimeArchive(PICK_PROOT_ARCHIVE) })
         panel.addView(button("Pilih arsip Glibc RootFS (.tar.xz)") { pickRuntimeArchive(PICK_ROOTFS_ARCHIVE) })
-        panel.addView(button("Pilih paket Wine + Box64 + Hangover (.tar.gz/.tar.xz)") { pickRuntimeArchive(PICK_COMPAT_ARCHIVE) })
+        panel.addView(button("Pilih paket Wine + Hangover/Box64 WoW64 (.tar.gz/.tar.xz)") { pickRuntimeArchive(PICK_COMPAT_ARCHIVE) })
         panel.addView(button("Pilih paket DXVK-Sarek 1.11.0 (.tar.gz)") { pickRuntimeArchive(PICK_DXVK_ARCHIVE) })
         installerStatus = label("Installer: belum ada paket yang dipasang.")
         panel.addView(installerStatus)
 
         panel.addView(label("Runtime backend", 20f))
         panel.addView(label("Backend utama: LauncherPC Core + GNU Glibc ARM64"))
-        panel.addView(label("Komponen kompatibilitas: Wine/Hangover + Box64 WoW64 + DXVK-Sarek 1.11.0"))
+        panel.addView(label("Komponen kompatibilitas: Wine ARM64 + Hangover wowbox64.dll + DXVK-Sarek 1.11.0"))
         panel.addView(label("Status: DXVK-Sarek dipilih sebagai kandidat; belum dipasang atau dijalankan."))
 
         panel.addView(label("Profil perangkat", 20f))
@@ -200,7 +200,7 @@ class MainActivity : Activity(), SurfaceHolder.Callback {
         installInProgress = true
         val packageLabel = when {
             isProot -> "PRoot ARM64"
-            isCompat -> "Wine + Box64 + Hangover"
+            isCompat -> "Wine + Hangover/Box64 WoW64"
             isDxvk -> "DXVK-Sarek 1.11.0"
             else -> "Glibc RootFS"
         }
