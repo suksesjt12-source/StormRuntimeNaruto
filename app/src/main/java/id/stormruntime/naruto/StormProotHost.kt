@@ -142,12 +142,12 @@ internal object StormProotHost {
                     "Wine merespons, tetapi Box64 Linux executable gagal memulai (exit ${box64Result.exitCode}). Output: ${box64Result.output.trim().take(700)}"
                 )
             }
-            box64Detail += "\\nBox64 CLI: ${box64Result.output.trim().take(200)}"
+            box64Detail += "\nBox64 CLI: ${box64Result.output.trim().take(200)}"
         }
 
         return RuntimeValidation(
             StormRuntimeProtocol.STATE_WINE_SMOKE_OK,
-            "Wine --version berhasil di dalam PRoot/Glibc. Hangover Box64 WoW64 DLL tervalidasi sebagai PE32+ ARM64, tetapi belum dimuat dan belum diuji menjalankan PE32.\\nWine: ${wineResult.output.trim().take(250)}\\n$box64Detail"
+            "Wine --version berhasil di dalam PRoot/Glibc. Hangover Box64 WoW64 DLL tervalidasi sebagai PE32+ ARM64, tetapi belum dimuat dan belum diuji menjalankan PE32.\nWine: ${wineResult.output.trim().take(250)}\\n$box64Detail"
         )
     }
 
