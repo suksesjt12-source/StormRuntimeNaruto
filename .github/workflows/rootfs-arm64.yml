@@ -48,5 +48,6 @@ jobs:
             build/rootfs-arm64/storm-rootfs-bookworm-arm64.tar.xz
             build/rootfs-arm64/SHA256SUMS
             build/rootfs-arm64/stage/manifest.properties
+            build/rootfs-arm64/stage/packages.lock
           if-no-files-found: error
           retention-days: 30
