@@ -101,6 +101,7 @@ class MainActivity : Activity(), SurfaceHolder.Callback {
         runtimeStatus = label("Menunggu proses runtime...")
         panel.addView(runtimeStatus)
         panel.addView(button("Periksa status Storm Core") { runtimeClient.queryStatus() })
+        panel.addView(button("Uji PRoot + Glibc RootFS") { runtimeClient.runGlibcSmokeTest() })
         panel.addView(button("Minta jalankan Naruto") { runtimeClient.requestGameLaunch() })
         panel.addView(label("Vulkan device diagnostic:"))
         panel.addView(label(NativeBridge.vulkanStatus()))
