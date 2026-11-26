@@ -81,7 +81,7 @@ MANIFEST
 
 echo "[6/6] Packaging normalized rootfs archive"
 tar --sort=name --mtime='UTC 2020-01-01' --owner=0 --group=0 --numeric-owner \
-  -C "$STAGE" -cJf "$ARCHIVE" rootfs manifest.properties packages.lock
+  -C "$STAGE" -cJf "$ARCHIVE" rootfs
 (
   cd "$WORK"
   sha256sum "$(basename "$ARCHIVE")" > SHA256SUMS
