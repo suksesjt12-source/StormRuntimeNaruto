@@ -133,8 +133,16 @@ internal object StormProotHost {
     private fun readBounded(file: File): String {
         if (!file.isFile) return ""
         return try {
-            val bytes = file.inputStream().use { it.readNBytes(MAX_LOG_BYTES) }
-            bytes.toString(Charsets.UTF_8)
+            file.inputStream().use { input ->
+                val buffer = ByteArray(MAX_LOG_BYTES)
+                var count = 0
+                while (count < buffer.size) {
+                    val read = input.read(buffer, count, buffer.size - count)
+                    if (read <= 0) break
+                    count += read
+                }
+                String(buffer, 0, count, Charsets.UTF_8)
+            }
         } catch (_: Exception) {
             ""
         }
