@@ -48,6 +48,11 @@ jobs:
           cd "$RUNNER_TEMP/DXVK-Sarek"
           git rev-parse HEAD | tee "$GITHUB_WORKSPACE/dxvk-sarek-source-commit.txt"
           git rev-parse HEAD | grep -q '^7c0e3b2'
+          # The pinned source uses a legacy D3D9 structure identifier that
+          # current MinGW headers expose as D3DDEVINFO_D3DRESOURCEMANAGER.
+          # Keep the upstream source pin unchanged and record this build-only fix.
+          sed -i 's/D3DDEVINFO_RESOURCEMANAGER/D3DDEVINFO_D3DRESOURCEMANAGER/g' src/d3d9/d3d9_query.cpp
+          grep -n 'D3DDEVINFO_D3DRESOURCEMANAGER' src/d3d9/d3d9_query.cpp
 
       - name: Build 32-bit and 64-bit Windows DLLs
         run: |
