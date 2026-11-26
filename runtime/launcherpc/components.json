@@ -48,7 +48,7 @@
       "releaseUrl": "https://github.com/pythonlover02/DXVK-Sarek/releases/tag/v1.11.0",
       "vulkanBaseline": "1.1",
       "shaderCompilation": "release-default",
-      "status": "built-windows-x86-and-x64-dlls; artifact-not-yet-imported; device-validation-pending",
+      "status": "built-windows-x86-and-x64-dlls; matching-archive-checksum-added; package-install-and-device-validation-pending",
       "enablePolicy": "require-vulkan-1.1-swapchain-graphics-queue-android-surface-and-presentation-probe",
       "note": "Unofficial DXVK 1.10.x continuation; not upstream doitsujin DXVK 1.11.",
       "artifact": {
@@ -74,7 +74,7 @@
     "physicalHelioG100": false,
     "android14Proot": false,
     "maliVulkanPresentation": false,
-    "dxvkSarek1110Build": false,
+    "dxvkSarek1110Build": true,
     "dxvkSarekD3d9": false,
     "pe32Wow64": false,
     "narutoMainMenu": false,
