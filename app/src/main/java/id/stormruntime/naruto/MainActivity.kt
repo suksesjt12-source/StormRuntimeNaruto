@@ -159,6 +159,7 @@ class MainActivity : Activity(), SurfaceHolder.Callback {
         panel.addView(runtimeStatus)
         panel.addView(button("Periksa status LauncherPC Core") { runtimeClient.queryStatus() })
         panel.addView(button("Uji PRoot + Glibc RootFS") { runtimeClient.runGlibcSmokeTest() })
+        panel.addView(button("Uji Wine + Box64 di PRoot") { runtimeClient.runCompatibilitySmokeTest() })
         panel.addView(button("Minta jalankan Naruto") { runtimeClient.requestGameLaunch() })
         panel.addView(label("Vulkan device diagnostic:"))
         panel.addView(label(NativeBridge.vulkanStatus()))
