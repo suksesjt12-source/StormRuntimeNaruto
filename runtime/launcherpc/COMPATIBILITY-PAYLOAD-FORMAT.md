@@ -25,17 +25,19 @@ The exact Hangover library location is selected by the package manifest. Do not 
 ```properties
 format=storm-compatibility-v1
 wine=bin/wine
+# Optional standalone Box64 Linux executable:
 box64=bin/box64
+# Required Hangover WoW64 emulator DLL built from Box64:
 hangover.wow64_i386=lib/wine/aarch64-windows/wowbox64.dll
 ```
 
-Wine and Box64 must be non-empty ELF64 little-endian AArch64 executables. The Hangover `wowbox64.dll` must be a PE32+ ARM64 DLL (machine `0xAA64`, optional-header magic `0x020b`). All files must remain inside the package directory. Wine and Box64 are marked executable by the installer.
+Wine must be a non-empty ELF64 little-endian AArch64 executable. The Hangover `wowbox64.dll` must be a PE32+ ARM64 DLL (machine `0xAA64`, optional-header magic `0x020b`). A standalone Box64 Linux executable is optional; if supplied, it must be ELF64 AArch64. All files must remain inside the package directory. Linux executables are marked executable by the installer.
 
 ## Installation checks
 
 LauncherPC verifies the selected archive against a separately selected SHA-256 file before extraction. Extraction is staged, rejects absolute paths, traversal, hard links and special files, and defers symlink creation until regular files have been extracted. The compatibility manifest is checked before the package is activated.
 
-After each package installation, LauncherPC writes a top-level `storm-runtime-bundle-v1` manifest. The bundle is considered incomplete until PRoot, the Glibc rootfs, Wine, Box64 and the Hangover WoW64 bridge are all present.
+After each package installation, LauncherPC writes a top-level `storm-runtime-bundle-v1` manifest. The bundle is considered incomplete until PRoot, the Glibc rootfs, Wine and the Hangover Box64 WoW64 bridge are all present.
 
 
 ## DXVK-Sarek package
