@@ -85,11 +85,14 @@ jobs:
           INFO
           find runtime-artifact -type f ! -name SHA256SUMS -print0 | sort -z | xargs -0 sha256sum > runtime-artifact/SHA256SUMS
           tar -czf launcherpc-dxvk-sarek-1.11.0-windows-dlls.tar.gz runtime-artifact
+          sha256sum launcherpc-dxvk-sarek-1.11.0-windows-dlls.tar.gz > launcherpc-dxvk-sarek-1.11.0-windows-dlls.tar.gz.sha256
 
       - name: Upload DXVK-Sarek component artifact
         uses: actions/upload-artifact@v4
         with:
           name: launcherpc-dxvk-sarek-1.11.0
-          path: launcherpc-dxvk-sarek-1.11.0-windows-dlls.tar.gz
+          path: |
+            launcherpc-dxvk-sarek-1.11.0-windows-dlls.tar.gz
+            launcherpc-dxvk-sarek-1.11.0-windows-dlls.tar.gz.sha256
           if-no-files-found: error
           retention-days: 30
