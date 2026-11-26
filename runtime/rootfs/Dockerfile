@@ -19,7 +19,6 @@ RUN apt-get update \
  && mkdir -p /dev /proc /sys /tmp /run /root /home/storm \
  && chmod 1777 /tmp \
  && : > /etc/machine-id \
- && printf '%s\n' 'Storm Runtime ARM64 rootfs' > /etc/hostname \
-
+ && printf '%s\\n' 'Storm Runtime ARM64 rootfs' > /etc/hostname
 
 CMD ["/bin/bash"]
