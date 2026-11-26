@@ -43,9 +43,9 @@ A Vulkan probe or clear/present test is not proof of DXVK or Direct3D compatibil
 
 The LauncherPC-specific integration contract is documented in [LauncherPC Winlator Mali architecture](docs/LAUNCHERPC_WINLATOR_MALI_ARCHITECTURE.md). A version candidate manifest is stored at runtime/launcherpc/components.json.
 
-The plan uses Winlator Mali Bionic 1.2.1 as a source reference for the Mali Wrapper and BCn emulation approach, Box64 0.4.4 as a candidate baseline, and DXVK 3.1.1 as an optional upstream candidate. DXVK 2.7.1 and 1.10.3 are fallback candidates. These are version references, not binaries already imported or validated on the target device.
+The plan uses Winlator Mali Bionic 1.2.1 as a source reference for the Mali Wrapper and BCn emulation approach, and Box64 0.4.4 as a candidate baseline. The selected DXVK component is **DXVK-Sarek v1.11.0 (Red River)**, pinned to tag `v1.11.0` and source commit prefix `7c0e3b2`. This is an unofficial continuation of the DXVK 1.10.x line, not an official upstream DXVK 1.11 release. The pinned source is not yet part of the Android APK.
 
-For Mali, the Wrapper + ASTC/ETC2 route is the first graphics path to test. DXVK must remain a separate Vulkan route and may only be selected after checking Vulkan API version, extensions, formats, and presentation support. Never force the newest DXVK version on a device that does not meet its requirements.
+A dedicated GitHub Actions workflow now builds the Sarek 1.11.0 Win32 and Win64 DLL sets from the pinned source tag and uploads them as a separate component artifact. The build workflow has been added but has not yet been observed completing successfully. For Mali, the Wrapper + ASTC/ETC2 route remains the separate fallback path. DXVK-Sarek is selected only after the Vulkan 1.1, swapchain, graphics queue, Android surface, and presentation checks pass.
 
 ## Runtime architecture and status
 
