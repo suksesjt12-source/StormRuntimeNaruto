@@ -58,7 +58,7 @@ test -d "$ROOTFS/tmp"
 
 echo "[4/5] Recording installed package versions"
 docker run --rm --platform linux/arm64 "$IMAGE" \
-  dpkg-query -W -f='${Package}=${Version}\\n' > "$STAGE/packages.lock"
+  dpkg-query -W -f='${Package}=${Version}\n' > "$STAGE/packages.lock"
 test -s "$STAGE/packages.lock"
 
 echo "[5/6] Writing rootfs provenance manifest"
