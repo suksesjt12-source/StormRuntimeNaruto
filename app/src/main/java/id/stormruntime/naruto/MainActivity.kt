@@ -18,6 +18,7 @@ class MainActivity : Activity(), SurfaceHolder.Callback {
     private lateinit var exeStatus: TextView
     private lateinit var runtimeStatus: TextView
     private lateinit var surfaceStatus: TextView
+    private lateinit var runtimeClient: StormRuntimeClient
     private var selectedTree: Uri? = null
 
     companion object { private const val PICK_GAME_FOLDER = 4101 }
@@ -25,8 +26,21 @@ class MainActivity : Activity(), SurfaceHolder.Callback {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         buildUi()
-        runtimeStatus.text = "Runtime: Wine/Hangover belum tersedia"
+        runtimeClient = StormRuntimeClient(this) { status ->
+            if (::runtimeStatus.isInitialized) runtimeStatus.text = status
+        }
+        runtimeStatus.text = "Storm Core: menunggu koneksi proses runtime"
         exeStatus.text = "NSUNSR.exe: belum diperiksa"
+    }
+
+    override fun onStart() {
+        super.onStart()
+        runtimeClient.bind()
+    }
+
+    override fun onStop() {
+        runtimeClient.unbind()
+        super.onStop()
     }
 
     private fun buildUi() {
@@ -52,7 +66,7 @@ class MainActivity : Activity(), SurfaceHolder.Callback {
 
         panel.addView(label("STORM RUNTIME", 26f))
         panel.addView(label("Naruto Shippuden: Ultimate Ninja Storm Revolution"))
-        panel.addView(label("Android Native • Surface Diagnostic Prototype 0.2.0"))
+        panel.addView(label("Android Native • Storm Core IPC Prototype 0.3.0"))
         panel.addView(button("Pilih folder instalasi game") { pickFolder() })
         folderStatus = label("Folder game: belum dipilih")
         panel.addView(folderStatus)
@@ -64,9 +78,9 @@ class MainActivity : Activity(), SurfaceHolder.Callback {
         panel.addView(label("Batas FPS target: 30 FPS"))
 
         panel.addView(label("Runtime backend", 20f))
-        panel.addView(label("Backend utama: Glibc ARM64 (belum terintegrasi)"))
-        panel.addView(label("Bionic: jalur eksperimen terpisah; tidak dipakai sebagai fallback otomatis"))
-        panel.addView(label("Status: launcher belum memuat Glibc, Wine, Box64, atau DXVK."))
+        panel.addView(label("Backend utama: Storm Core + GNU Glibc ARM64"))
+        panel.addView(label("Komponen kompatibilitas: Wine/Hangover + Box64 WoW64 + DXVK"))
+        panel.addView(label("Status: komponen runtime belum dipasang; peluncuran game tetap dikunci."))
 
         panel.addView(label("Profil perangkat", 20f))
         val deviceInfo = StormRuntimeConfig.deviceSummary()
@@ -83,18 +97,17 @@ class MainActivity : Activity(), SurfaceHolder.Callback {
             LinearLayout.LayoutParams.MATCH_PARENT, (220 * resources.displayMetrics.density).toInt()
         ))
 
-        panel.addView(label("Runtime status", 20f))
-        runtimeStatus = label(NativeBridge.status())
+        panel.addView(label("Storm Core process status", 20f))
+        runtimeStatus = label("Menunggu proses runtime...")
         panel.addView(runtimeStatus)
+        panel.addView(button("Periksa status Storm Core") { runtimeClient.queryStatus() })
+        panel.addView(button("Minta jalankan Naruto") { runtimeClient.requestGameLaunch() })
         panel.addView(label("Vulkan device diagnostic:"))
         panel.addView(label(NativeBridge.vulkanStatus()))
-        panel.addView(label("Catatan: surface probe membuat VkSurfaceKHR dan memeriksa present support. Belum membuat swapchain atau menjalankan Wine/EXE."))
+        panel.addView(label("Catatan: Vulkan probe bukan bukti DXVK/D3D9 siap. Service Storm Core saat ini hanya memvalidasi bundle dan menolak peluncuran yang belum didukung."))
         panel.addView(button("Periksa ulang file game") { inspectGameFolder() })
         panel.addView(button("Periksa ulang Android surface") {
             surfaceStatus.text = NativeBridge.androidSurfaceStatus()
-        })
-        panel.addView(button("Lihat status runtime") {
-            runtimeStatus.text = NativeBridge.status()
         })
     }
 
