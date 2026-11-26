@@ -2,9 +2,14 @@
   "product": "LauncherPC",
   "schemaVersion": 2,
   "target": {
-    "abis": ["arm64-v8a"],
+    "abis": [
+      "arm64-v8a"
+    ],
     "androidApi": 34,
-    "chipsets": ["MediaTek Helio G99", "MediaTek Helio G100"],
+    "chipsets": [
+      "MediaTek Helio G99",
+      "MediaTek Helio G100"
+    ],
     "gpu": "ARM Mali-G57 MC2",
     "ramGiB": 8
   },
@@ -12,7 +17,10 @@
     "androidHost": "bionic",
     "linuxGuest": "debian-arm64-glibc",
     "userspaceSupervisor": "proot",
-    "windowsCompatibility": ["wine", "hangover"],
+    "windowsCompatibility": [
+      "wine",
+      "hangover"
+    ],
     "cpuTranslator": {
       "name": "box64",
       "baseline": "0.4.4",
@@ -24,7 +32,10 @@
     "maliWrapper": {
       "sourceReference": "GunaCharanTeja/WinlatorMali",
       "referenceRelease": "1.2.1",
-      "bcnEmulationCandidates": ["ASTC", "ETC2"],
+      "bcnEmulationCandidates": [
+        "ASTC",
+        "ETC2"
+      ],
       "status": "source-audit-and-device-validation-required"
     },
     "dxvk": {
@@ -37,11 +48,20 @@
       "releaseUrl": "https://github.com/pythonlover02/DXVK-Sarek/releases/tag/v1.11.0",
       "vulkanBaseline": "1.1",
       "shaderCompilation": "release-default",
-      "status": "selected-not-yet-imported-or-built",
+      "status": "built-windows-x86-and-x64-dlls; artifact-not-yet-imported; device-validation-pending",
       "enablePolicy": "require-vulkan-1.1-swapchain-graphics-queue-android-surface-and-presentation-probe",
-      "note": "Unofficial DXVK 1.10.x continuation; not upstream doitsujin DXVK 1.11."
+      "note": "Unofficial DXVK 1.10.x continuation; not upstream doitsujin DXVK 1.11.",
+      "artifact": {
+        "name": "launcherpc-dxvk-sarek-1.11.0",
+        "workflowRun": "https://github.com/suksesjt12-source/StormRuntimeNaruto/actions/runs/45744337460",
+        "sha256": "7937950e39130aad76b0ad2c5f4cda3216112ccf9b4dc0941a8546291ff56151",
+        "note": "CI artifact contains Windows DLLs only; not an Android APK and not yet integrated into the runtime bundle."
+      }
     },
-    "fallback": ["mali-wrapper", "wined3d"]
+    "fallback": [
+      "mali-wrapper",
+      "wined3d"
+    ]
   },
   "performance": {
     "initialResolution": "960x540",
