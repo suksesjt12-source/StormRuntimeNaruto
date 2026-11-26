@@ -2,84 +2,68 @@
 
 ## Product decision
 
-The Android application is named **LauncherPC**. Its UI, navigation, game library, settings, and container controls remain LauncherPC-owned. Winlator Mali is an upstream runtime/component reference and source of compatible backend components; its UI must not be exposed as the LauncherPC shell.
+LauncherPC owns the Android UI, game library, settings, container controls, and process supervision. Winlator Mali is an upstream runtime/component reference; its launcher UI is not part of the LauncherPC shell.
 
-Target devices: MediaTek Helio G99 / G100, ARM64 Android 14, Mali-G57 MC2, 8 GB RAM.
+Target: ARM64 Android 14, MediaTek Helio G99/G100, Mali-G57 MC2, 8 GB RAM.
 
 ## Runtime boundaries
 
-1. Android UI process: Android/Bionic only. It owns LauncherPC UI, permissions, SAF access, preferences, and user-facing lifecycle.
-2. LauncherPC Core process: Android/Bionic host and IPC controller. It validates manifests, stages assets, starts/stops runtime processes, collects logs, and reports capability probes.
-3. Linux guest userspace: Debian ARM64 with glibc, isolated from Bionic. PRoot is the initial userspace boundary; do not load glibc libraries into the Android process.
-4. Windows compatibility stack: Wine/Hangover plus Box64 WoW64 and matching i386 guest components. Launch only after ABI and dependency checks pass.
-5. Graphics stack: selectable Mali Wrapper path and DXVK/Vulkan path. They are alternative rendering routes, not blindly chained layers.
-6. Audio/input: explicit bridge interfaces from Android to the guest process; bundling a library alone does not implement forwarding.
+1. Android UI and LauncherPC Core are Android/Bionic processes.
+2. Linux guest: Debian ARM64 with glibc, isolated from Bionic by PRoot. Never load glibc into the Android process.
+3. Windows compatibility: Wine/Hangover plus Box64 WoW64 and matching i386 guest components.
+4. Graphics routes are alternatives: Mali Graphics Wrapper, DXVK-Sarek/Vulkan, or WineD3D fallback. Do not blindly chain Wrapper and DXVK.
+5. Audio/input require explicit Android-to-guest bridges; merely packaging libraries is not enough.
 
-## Component baseline and policy
+## Graphics component decision
 
-| Component | Baseline / candidate | Policy |
+| Component | Selected baseline | Current state |
 |---|---|---|
-| Winlator Mali | Bionic 1.2.1 | Final upstream release; source reference, not a live update channel |
-| Box64 | 0.4.4 | Baseline reported in Winlator 11.2 release notes; verify ABI/build against guest |
-| DXVK | 3.1.1 | Latest upstream candidate; enable only after Vulkan capability checks |
-| DXVK fallback | 2.7.1, 1.10.3 | Test per device/game; newer does not automatically mean faster or compatible |
-| Mali Graphics Wrapper | Winlator Mali Wrapper implementation | Primary Mali-specific route, subject to source/license audit and device validation |
-| BCn emulation | ASTC / ETC2 | Capability-gated; persistent cache must be versioned and invalidated safely |
-| Userspace | Debian ARM64 + glibc | Separate from Android/Bionic |
-| Process supervision | LauncherPC Core + PRoot | Bounded startup, timeout, exit status, logs, graceful stop |
+| Mali Wrapper | Winlator Mali Bionic 1.2.1 source reference | Not imported; source/license audit and device validation required |
+| DXVK | **DXVK-Sarek v1.11.0 “Red River”** | Version pinned in manifest; source not yet imported or built |
+| DXVK upstream | No upstream 1.11.0 release | Do not label Sarek as official upstream DXVK |
+| Fallback | Mali Wrapper, then WineD3D | Selection remains capability- and per-game-gated |
 
-Version references are not proof that binaries have been imported or that the combination runs on Mali-G57. Pin immutable upstream tags/commits and checksums before packaging.
+DXVK-Sarek is an unofficial continuation of the DXVK 1.10.x line. Its project describes a Vulkan 1.1/1.2 baseline and makes a number of extensions optional to support older or incomplete drivers. It is therefore the selected candidate for Mali-G57 testing, not a guarantee of compatibility or performance.
 
-## Renderer selection
+Pinned source reference:
+- Repository: https://github.com/pythonlover02/DXVK-Sarek
+- Tag: `v1.11.0`
+- Release commit prefix: `7c0e3b2`
+- Release: https://github.com/pythonlover02/DXVK-Sarek/releases/tag/v1.11.0
 
-LauncherPC must probe Vulkan API version, extensions, formats, queue families, memory budget, and presentation support at runtime.
+The Android native probe now checks the Vulkan 1.1 API baseline, VK_KHR_swapchain, a graphics queue, and Android surface instance extensions. The existing Android Surface probe separately checks actual surface/swapchain presentation. Both are diagnostics; neither proves that DXVK DLLs load or that D3D9 works.
 
-- mali_wrapper: preferred first test route for Mali devices, with BCn emulation set to ASTC or ETC2 only when required formats are available.
-- dxvk_vulkan: permitted only when the device driver satisfies the selected DXVK build's Vulkan and extension requirements and the Android presentation bridge passes smoke tests.
-- wined3d_fallback: compatibility fallback for games that do not work with the Vulkan route.
-- Never silently select DXVK 3.x on a device that lacks its required Vulkan capabilities.
-- Store renderer choice per game/container, not as a global forced setting.
+## Renderer enable policy
 
-The upstream Winlator Mali Bionic instructions recommend the Wrapper route and ASTC/ETC2 BCn emulation for Mali; Wrapper is therefore the first Mali candidate. DXVK remains a separate optional route and must pass validation.
+DXVK-Sarek must remain disabled unless all checks pass:
+1. Vulkan physical device reports API 1.1 or newer.
+2. VK_KHR_swapchain is available.
+3. A graphics queue is available.
+4. VK_KHR_surface and VK_KHR_android_surface are available.
+5. The Android surface/swapchain presentation smoke test passes.
+6. DXVK-Sarek x32/x64 DLLs are built/imported for the guest ABI and pass Wine D3D9 smoke tests.
 
-## Helio G99/G100 performance policy
+If the DXVK route fails, select the Mali Wrapper route as a separate backend. WineD3D remains a compatibility fallback. Renderer selection is stored per game/container.
 
-- Initial resolution profile: 960x540.
-- Initial frame cap: 30 FPS.
-- Box64 preset: start with a balanced/performance candidate, then compare per game.
-- Keep CPU affinity at Android scheduler defaults unless measurements prove a safe benefit.
-- Avoid forcing GPU clocks, thermal overrides, or privileged sysfs writes.
-- Keep shader and texture caches on app-private storage with size limits and version keys.
-- Compile/cache shaders incrementally; avoid synchronous full-cache work during game launch.
-- Monitor frame time, process RSS, battery temperature, and sustained FPS. Reduce resolution/effects before increasing memory budgets.
-- Do not promise stable FPS until tested on physical Helio G99 and G100 devices.
+## Performance policy
 
-## Required integration stages
+- Initial test profile: 960×540, 30 FPS cap.
+- Do not force CPU/GPU clocks, thermal limits, or privileged sysfs writes.
+- Track frame time, RSS, battery temperature, and sustained FPS.
+- Use app-private versioned shader caches with bounded size.
+- Do not claim stable FPS until physical Helio G99 and G100 testing is completed.
 
-### Stage A — branding and component contract
-- Rename user-facing product strings to LauncherPC.
-- Keep package/application identity migration explicit; do not change applicationId without a migration decision.
-- Add component manifest, provenance, licenses, hashes, and ABI checks.
+## Implementation status
 
-### Stage B — source integration
-- Audit Winlator Mali source and all transitive licenses.
-- Import only runtime/backend modules needed by LauncherPC; do not embed its launcher UI.
-- Build Box64, Wine/Hangover, DXVK and Mali Wrapper for compatible ARM64/guest ABIs.
-- Preserve upstream notices and source-offer obligations.
+Completed in this iteration:
+- Pinned DXVK-Sarek v1.11.0 metadata and provenance in the component manifest.
+- Added a native Vulkan capability probe for the Sarek Vulkan 1.1 baseline.
+- Added a separate CMake source entry and launcher diagnostic hook (see source files).
 
-### Stage C — Android integration
-- Implement package staging, runtime version checks, process lifecycle, log collection, and IPC.
-- Validate Bionic host / glibc guest boundary.
-- Implement Android Vulkan surface/presentation bridge before enabling DXVK.
+Not completed:
+- Import/build of DXVK-Sarek binaries and Wine/Hangover/Box64.
+- Runtime DLL installation and Wine overrides.
+- Android guest Vulkan loader/WSI bridge.
+- D3D9 smoke test, PE32 WoW64 execution, Naruto launch, or sustained gameplay test.
 
-### Stage D — validation
-- Unit tests for manifest, ABI, hashes, and renderer selection.
-- PRoot/rootfs smoke test on Android 14.
-- Vulkan capability report on Mali-G57.
-- D3D9/DXVK smoke test, then PE32 WoW64 execution test.
-- Naruto launch through LauncherPC UI and physical-device play test.
-- Sustained 30-minute and 60-minute tests with frame-time and thermal logs.
-
-## Current truth / non-goals
-
-This document defines the integration contract. It does not claim that Winlator Mali, Box64 0.4.4, DXVK 3.1.1, or Mali Wrapper binaries have already been built, packaged, or tested in this repository. A successful Android APK build alone is not proof that Windows games can run.
+An APK build alone is not evidence that a Windows game can run.
