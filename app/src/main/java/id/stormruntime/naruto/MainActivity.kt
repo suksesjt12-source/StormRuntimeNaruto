@@ -105,7 +105,7 @@ class MainActivity : Activity(), SurfaceHolder.Callback {
         panel.addView(label("Profil rekomendasi: " + StormRuntimeConfig.defaultProfile.summary))
         panel.addView(label("Catatan: nilai profil adalah konfigurasi awal yang ditampilkan, belum diterapkan ke proses game."))
 
-        panel.addView(label("DXVK-Sarek Vulkan 1.11 baseline diagnostic", 20f))
+        panel.addView(label("DXVK-Sarek 1.11.0 • Vulkan 1.1 capability probe", 20f))
         panel.addView(label(NativeBridge.dxvkSarekStatus()))
         panel.addView(label("Catatan: probe ini memeriksa Vulkan 1.1, swapchain, dan queue. Uji Android surface/present tetap terpisah; belum membuktikan DLL DXVK atau D3D9 siap."))
 
