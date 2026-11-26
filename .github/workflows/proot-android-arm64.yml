@@ -1,0 +1,88 @@
+name: Build Android PRoot ARM64
+
+on:
+  push:
+    branches: ["feature/mtk-glibc-runtime"]
+    paths:
+      - ".github/workflows/proot-android-arm64.yml"
+      - "docs/STORM_PROOT_HOST.md"
+  pull_request:
+    branches: ["main"]
+    paths:
+      - ".github/workflows/proot-android-arm64.yml"
+      - "docs/STORM_PROOT_HOST.md"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build-proot-aarch64:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 45
+    steps:
+      - name: Install build tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential wget tar gzip binutils
+
+      - name: Set up Java for Android SDK
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Set up Android NDK
+        uses: android-actions/setup-android@v4
+        with:
+          packages: "ndk;23.2.8568313"
+          accept-android-sdk-licenses: true
+
+      - name: Checkout Android PRoot build scripts
+        run: |
+          git clone --depth 1 https://github.com/green-green-avk/build-proot-android.git "$RUNNER_TEMP/proot-builder"
+          cd "$RUNNER_TEMP/proot-builder"
+          sed -i "s#^NDK=.*#NDK=$ANDROID_SDK_ROOT/ndk/23.2.8568313#" config
+          sed -i "s#^ARCHS=.*#ARCHS='aarch64'#" config
+          grep -E '^(PROOT_V|TALLOC_V|ARCHS|NDK)=' config
+
+      - name: Build Android Bionic PRoot for ARM64
+        run: |
+          cd "$RUNNER_TEMP/proot-builder"
+          # Upstream talloc 2.1.14 bundles a Python-2-only Waf. Convert its
+          # build scripts to Python 3 after download and before invoking make.
+          ./get-talloc.sh
+          find "$RUNNER_TEMP/proot-builder/build/talloc-2.1.14" -type f -name '*.py' -print0 | while IFS= read -r -d '' file; do python3 -m lib2to3 -w -n "$file"; done
+          ./get-proot.sh
+          ./make-talloc-static.sh
+          ./make-proot.sh
+          ./pack.sh
+
+      - name: Validate PRoot package
+        run: |
+          set -euo pipefail
+          cd "$RUNNER_TEMP/proot-builder"
+          PACKAGE="packages/proot-android-aarch64.tar.gz"
+          test -s "$PACKAGE"
+          mkdir -p "$RUNNER_TEMP/proot-package"
+          tar -xzf "$PACKAGE" -C "$RUNNER_TEMP/proot-package"
+          PROOT="$RUNNER_TEMP/proot-package/root/bin/proot"
+          LOADER="$RUNNER_TEMP/proot-package/root/libexec/proot/loader"
+          test -s "$PROOT"
+          test -s "$LOADER"
+          readelf -h "$PROOT" | grep -q 'Machine:.*AArch64'
+          readelf -h "$LOADER" | grep -q 'Machine:.*AArch64'
+          file "$PROOT" "$LOADER"
+          sha256sum "$PACKAGE" > packages/proot-android-aarch64.tar.gz.sha256
+          cp "$PACKAGE" "$GITHUB_WORKSPACE/proot-android-aarch64.tar.gz"
+          cp packages/proot-android-aarch64.tar.gz.sha256 "$GITHUB_WORKSPACE/proot-android-aarch64.tar.gz.sha256"
+
+      - name: Upload PRoot ARM64 package
+        uses: actions/upload-artifact@v4
+        with:
+          name: storm-proot-android-arm64
+          path: |
+            proot-android-aarch64.tar.gz
+            proot-android-aarch64.tar.gz.sha256
+          if-no-files-found: error
+          retention-days: 30

@@ -5,41 +5,61 @@ This repository is an experimental Android ARM64 project targeting the original 
 ## Implemented in source
 
 - Kotlin Android launcher in landscape mode.
-- Storage Access Framework game-folder picker.
-- Basic PE header inspection to distinguish Windows PE32/i386 from other executable formats.
+- Storage Access Framework game-folder picker and basic PE32/i386 header inspection.
 - JNI native library and Android Vulkan device diagnostics.
 - ARM64-only Gradle configuration, JVM 17 target alignment, and pinned Android NDK.
 - GitHub Actions APK build, package verification, checksum, and artifact upload.
-- Experimental branch: one-frame Vulkan render-pass clear and present test (not a game renderer).
+- Experimental Vulkan clear/present test (not a game renderer).
+- Custom Storm Core control-plane service hosted in a separate Android process (`:storm_runtime`).
+- Messenger IPC between launcher and Storm Core.
+- Glibc runtime bundle manifest validation.
+- PRoot smoke-test supervisor with AArch64 ELF checks, bounded execution, timeout, and launcher control; requires a separately supplied Bionic PRoot binary and installed rootfs.
+- Debian Bookworm ARM64 Glibc rootfs definition, Buildx/QEMU CI workflow, ELF ABI validation, package inventory, and checksummed rootfs artifact workflow.
 
 ## Runtime status — NOT GAME-CAPABLE YET
 
 **The app does not currently run Windows executables.**
 
-The preferred runtime research candidate is [Hangover](https://github.com/AndreRH/hangover), which combines ARM64 Wine WoW64 with emulator DLLs for i386 and x86_64 Windows applications. Hangover documents `wowbox64.dll` and `libwow64fex.dll` for i386 translation. However, the current Termux package recipe explicitly disables Wine's Android display driver and depends on Termux libraries and package paths. It is not directly embeddable into this native Activity.
+The selected architecture is Hybrid Custom: Storm Core owns process orchestration, configuration, component validation, and IPC; Wine/Hangover, Box64 WoW64, and DXVK remain upstream compatibility components to be built and integrated.
 
-The current Android app also runs its UI in a JVM Activity process. A Wine Android driver patch series proposes separating the Android UI and Wine processes due to Android seccomp and Wine thread/signal-context concerns. That proposal must be verified and integrated deliberately; simply loading Wine through JNI in the Activity is not an acceptable shortcut.
+The Android launcher and Android-side host use Bionic. GNU Glibc is intended for a separate AArch64 Linux userspace. Do not load Glibc and Bionic libraries into the same process. Storm Core now has a bounded PRoot smoke-test supervisor, but it does not bundle PRoot or install the rootfs; it does not yet start Wine, Hangover, Box64, or a Windows process.
 
-See:
+## Runtime architecture and status
+
+- [Storm Core architecture](docs/STORM_CORE_ARCHITECTURE.md)
+- [Glibc ARM64 sysroot](docs/GLIBC_ARM64_SYSROOT.md)
+- [Debian ARM64 Glibc rootfs](docs/STORM_ROOTFS.md)
+- [Storm PRoot host — Stage 3](docs/STORM_PROOT_HOST.md)
+- Android Bionic PRoot ARM64 build: `.github/workflows/proot-android-arm64.yml` (workflow artifact; not yet installed into the APK).
 - [Compatibility audit](docs/COMPATIBILITY_AUDIT.md)
 - [Android Wine/Hangover porting audit](docs/ANDROID_WINE_HANGOVER_PORTING_AUDIT.md)
 
-Box86 is not being treated as a standalone Windows executable translator: upstream Box86 targets x86 Linux userspace and requires a 32-bit ARM host userspace.
+The rootfs workflow builds a minimal Debian Bookworm ARM64 userspace and uploads it as a separate artifact. It is not included in the APK and is not yet installed on the phone. A successful rootfs workflow proves archive assembly and ELF architecture checks on CI only.
 
-Still not integrated:
+The rootfs does not contain PRoot, Wine, Hangover, Box64 WoW64, DXVK, an Android Vulkan/display bridge, or game files. The PRoot smoke-test code expects a separately supplied Android-compatible Bionic executable and a separately installed rootfs. Neither is bundled or installed by the current APK. PRoot must still be validated against Android 14 ptrace/system-call behavior before it can host the Glibc userspace.
+
+Box86 is not treated as a standalone Windows executable translator: upstream Box86 targets x86 Linux userspace and requires a 32-bit ARM host userspace.
+
+## Still not integrated
+
+- Build, package, and install an Android/Bionic-compatible PRoot ARM64 host, then validate ptrace/syscall behavior on Android 14.
+- Rootfs installer and lifecycle management in app-private storage.
 - Wine/Hangover runtime and Wine prefix.
-- i386 WoW64 translator DLL (FEX or Box64 WOW64).
-- Android/Bionic Wine process host and display driver.
-- D3D9/DXVK with a validated Android Vulkan presentation path.
+- Matching i386 WoW64 translator.
+- Android Wine display driver and actual Windows process supervision.
+- D3D9/DXVK with validated Android Vulkan presentation.
 - Windows audio and input forwarding.
-- Actual Windows process management.
 - End-to-end execution of `NSUNSR.exe`.
 
-The experimental Vulkan branch can compile a one-frame clear/present path, but it does not contain a game draw pipeline or a Wine/DXVK connection. It has not been verified on the target phone. A Vulkan probe does not prove DXVK or Direct3D 9 compatibility. Upstream DXVK requires Vulkan 1.3 and specific features, which must be checked on the actual device.
+The experimental Vulkan path is not a game renderer. A Vulkan probe or clear/present test does not prove DXVK or Direct3D 9 compatibility. Required Vulkan features must be checked on the actual Mali-G57 device.
 
-## CI build
+## CI workflows
 
-Pushes to `main` and manual workflow dispatch run the Android debug APK workflow. A successful APK build verifies packaging and compilation only; it does not verify runtime or game execution.
+- Android debug APK workflow: launcher compilation and packaging only.
+- Experimental Glibc sysroot workflow: cross-built Glibc sysroot artifact.
+- Storm ARM64 rootfs workflow: Debian Bookworm ARM64 rootfs archive and package inventory.
+
+A successful Gradle build, Glibc sysroot build, or rootfs build is not evidence of Windows executable support.
 
 ## Target device
 

@@ -1,0 +1,55 @@
+name: Build experimental Glibc ARM64 sysroot
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - ".github/workflows/glibc-arm64.yml"
+      - "scripts/build-glibc-arm64.sh"
+      - "runtime/glibc/**"
+    branches: ["feature/mtk-glibc-runtime"]
+
+permissions:
+  contents: read
+
+jobs:
+  build-glibc:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: feature/mtk-glibc-runtime
+      - name: Verify build inputs
+        run: |
+          set -euo pipefail
+          git rev-parse HEAD
+          test -f scripts/build-glibc-arm64.sh
+          test -x scripts/build-glibc-arm64.sh || chmod +x scripts/build-glibc-arm64.sh
+      - name: Install ARM64 cross toolchain
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends build-essential gcc-aarch64-linux-gnu g++-aarch64-linux-gnu binutils-aarch64-linux-gnu gawk bison python3 texinfo wget xz-utils
+      - name: Build Glibc ARM64 sysroot
+        run: bash scripts/build-glibc-arm64.sh
+      - name: Verify ELF architecture and loader
+        run: |
+          set -euo pipefail
+          test -s build/glibc-arm64/sysroot/lib/ld-linux-aarch64.so.1
+          readelf -h build/glibc-arm64/sysroot/lib/ld-linux-aarch64.so.1 | grep -E "Class:.*ELF64"
+          readelf -h build/glibc-arm64/sysroot/lib/ld-linux-aarch64.so.1 | grep -E "Machine:.*AArch64"
+          find build/glibc-arm64/sysroot -type f -name 'libc.so.6' -print -quit | grep -q .
+      - name: Package experimental sysroot
+        run: |
+          tar --sort=name --mtime='UTC 2020-01-01' --owner=0 --group=0 --numeric-owner -C build/glibc-arm64 -cJf storm-glibc-2.39-arm64-sysroot.tar.xz sysroot manifest.txt
+          sha256sum storm-glibc-2.39-arm64-sysroot.tar.xz | tee SHA256SUMS
+      - name: Upload Glibc sysroot artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: storm-glibc-2.39-arm64-sysroot
+          path: |
+            storm-glibc-2.39-arm64-sysroot.tar.xz
+            SHA256SUMS
+          if-no-files-found: error
+          retention-days: 30

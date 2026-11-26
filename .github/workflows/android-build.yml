@@ -2,7 +2,7 @@ name: Android APK Build
 on:
   workflow_dispatch:
   push:
-    branches: ["main"]
+    branches: ["main", "feature/mtk-glibc-runtime"]
 
 permissions:
   contents: read

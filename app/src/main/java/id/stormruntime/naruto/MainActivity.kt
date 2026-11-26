@@ -8,6 +8,7 @@ import android.view.Surface
 import android.view.SurfaceHolder
 import android.view.SurfaceView
 import android.widget.*
+import java.util.concurrent.Executors
 import androidx.documentfile.provider.DocumentFile
 import java.io.ByteArrayOutputStream
 import java.nio.ByteBuffer
@@ -18,15 +19,39 @@ class MainActivity : Activity(), SurfaceHolder.Callback {
     private lateinit var exeStatus: TextView
     private lateinit var runtimeStatus: TextView
     private lateinit var surfaceStatus: TextView
+    private lateinit var installerStatus: TextView
+    private val installerExecutor = Executors.newSingleThreadExecutor()
+    private var installInProgress = false
+    private var pendingArchiveUri: Uri? = null
+    private var pendingArchiveIsProot = false
+    private lateinit var runtimeClient: StormRuntimeClient
     private var selectedTree: Uri? = null
 
-    companion object { private const val PICK_GAME_FOLDER = 4101 }
+    companion object {
+        private const val PICK_GAME_FOLDER = 4101
+        private const val PICK_PROOT_ARCHIVE = 4102
+        private const val PICK_ROOTFS_ARCHIVE = 4103
+        private const val PICK_RUNTIME_CHECKSUM = 4104
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         buildUi()
-        runtimeStatus.text = "Runtime: Wine/Hangover belum tersedia"
+        runtimeClient = StormRuntimeClient(this) { status ->
+            if (::runtimeStatus.isInitialized) runtimeStatus.text = status
+        }
+        runtimeStatus.text = "Storm Core: menunggu koneksi proses runtime"
         exeStatus.text = "NSUNSR.exe: belum diperiksa"
+    }
+
+    override fun onStart() {
+        super.onStart()
+        runtimeClient.bind()
+    }
+
+    override fun onStop() {
+        runtimeClient.unbind()
+        super.onStop()
     }
 
     private fun buildUi() {
@@ -52,7 +77,7 @@ class MainActivity : Activity(), SurfaceHolder.Callback {
 
         panel.addView(label("STORM RUNTIME", 26f))
         panel.addView(label("Naruto Shippuden: Ultimate Ninja Storm Revolution"))
-        panel.addView(label("Android Native • Surface Diagnostic Prototype 0.2.0"))
+        panel.addView(label("Android Native • Storm Core IPC Prototype 0.3.0"))
         panel.addView(button("Pilih folder instalasi game") { pickFolder() })
         folderStatus = label("Folder game: belum dipilih")
         panel.addView(folderStatus)
@@ -62,6 +87,23 @@ class MainActivity : Activity(), SurfaceHolder.Callback {
         panel.addView(label("Pengaturan awal", 20f))
         panel.addView(label("Resolusi target pengujian: 960 × 540"))
         panel.addView(label("Batas FPS target: 30 FPS"))
+
+        panel.addView(label("Pemasangan runtime", 20f))
+        panel.addView(button("Pilih arsip PRoot ARM64 (.tar.gz)") { pickRuntimeArchive(PICK_PROOT_ARCHIVE) })
+        panel.addView(button("Pilih arsip Glibc RootFS (.tar.xz)") { pickRuntimeArchive(PICK_ROOTFS_ARCHIVE) })
+        installerStatus = label("Installer: belum ada paket yang dipasang.")
+        panel.addView(installerStatus)
+
+        panel.addView(label("Runtime backend", 20f))
+        panel.addView(label("Backend utama: Storm Core + GNU Glibc ARM64"))
+        panel.addView(label("Komponen kompatibilitas: Wine/Hangover + Box64 WoW64 + DXVK"))
+        panel.addView(label("Status: komponen runtime belum dipasang; peluncuran game tetap dikunci."))
+
+        panel.addView(label("Profil perangkat", 20f))
+        val deviceInfo = StormRuntimeConfig.deviceSummary()
+        panel.addView(label(deviceInfo))
+        panel.addView(label("Profil rekomendasi: " + StormRuntimeConfig.defaultProfile.summary))
+        panel.addView(label("Catatan: nilai profil adalah konfigurasi awal yang ditampilkan, belum diterapkan ke proses game."))
         panel.addView(label("Android Vulkan surface diagnostic", 20f))
         surfaceStatus = label("Surface: menunggu SurfaceView dibuat")
         panel.addView(surfaceStatus)
@@ -72,19 +114,60 @@ class MainActivity : Activity(), SurfaceHolder.Callback {
             LinearLayout.LayoutParams.MATCH_PARENT, (220 * resources.displayMetrics.density).toInt()
         ))
 
-        panel.addView(label("Runtime status", 20f))
-        runtimeStatus = label(NativeBridge.status())
+        panel.addView(label("Storm Core process status", 20f))
+        runtimeStatus = label("Menunggu proses runtime...")
         panel.addView(runtimeStatus)
+        panel.addView(button("Periksa status Storm Core") { runtimeClient.queryStatus() })
+        panel.addView(button("Uji PRoot + Glibc RootFS") { runtimeClient.runGlibcSmokeTest() })
+        panel.addView(button("Minta jalankan Naruto") { runtimeClient.requestGameLaunch() })
         panel.addView(label("Vulkan device diagnostic:"))
         panel.addView(label(NativeBridge.vulkanStatus()))
-        panel.addView(label("Catatan: surface probe membuat VkSurfaceKHR dan memeriksa present support. Belum membuat swapchain atau menjalankan Wine/EXE."))
+        panel.addView(label("Catatan: Vulkan probe bukan bukti DXVK/D3D9 siap. Service Storm Core saat ini hanya memvalidasi bundle dan menolak peluncuran yang belum didukung."))
         panel.addView(button("Periksa ulang file game") { inspectGameFolder() })
         panel.addView(button("Periksa ulang Android surface") {
             surfaceStatus.text = NativeBridge.androidSurfaceStatus()
         })
-        panel.addView(button("Lihat status runtime") {
-            runtimeStatus.text = NativeBridge.status()
-        })
+    }
+
+    private fun pickRuntimeArchive(requestCode: Int) {
+        if (installInProgress) {
+            installerStatus.text = "Installer sedang bekerja. Tunggu sampai selesai."
+            return
+        }
+        val intent = Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
+            addCategory(Intent.CATEGORY_OPENABLE)
+            type = "application/octet-stream"
+            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION)
+        }
+        startActivityForResult(intent, requestCode)
+    }
+
+    private fun requestChecksumFor(archive: Uri, isProot: Boolean) {
+        pendingArchiveUri = archive
+        pendingArchiveIsProot = isProot
+        installerStatus.text = "Pilih file checksum .sha256 yang berasal dari paket yang sama."
+        val intent = Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
+            addCategory(Intent.CATEGORY_OPENABLE)
+            type = "text/plain"
+            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION)
+        }
+        startActivityForResult(intent, PICK_RUNTIME_CHECKSUM)
+    }
+
+    private fun installRuntimeArchive(uri: Uri, checksumUri: Uri, isProot: Boolean) {
+        if (installInProgress) return
+        installInProgress = true
+        installerStatus.text = if (isProot) "Memverifikasi SHA-256 dan memasang PRoot ARM64..." else "Memverifikasi SHA-256 dan memasang Glibc RootFS..."
+        installerExecutor.execute {
+            val result = if (isProot) StormRuntimePackageInstaller.installProot(this, uri, checksumUri)
+                else StormRuntimePackageInstaller.installRootfs(this, uri, checksumUri)
+            runOnUiThread {
+                installInProgress = false
+                pendingArchiveUri = null
+                installerStatus.text = result.detail
+                runtimeClient.queryStatus()
+            }
+        }
     }
 
     private fun pickFolder() {
@@ -99,6 +182,21 @@ class MainActivity : Activity(), SurfaceHolder.Callback {
     @Deprecated("Use Activity Result API in a later iteration")
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
         super.onActivityResult(requestCode, resultCode, data)
+        if (resultCode == RESULT_OK && requestCode in setOf(PICK_PROOT_ARCHIVE, PICK_ROOTFS_ARCHIVE)) {
+            val archive = data?.data ?: return
+            val flags = data.flags and Intent.FLAG_GRANT_READ_URI_PERMISSION
+            try { contentResolver.takePersistableUriPermission(archive, flags) } catch (_: SecurityException) { }
+            requestChecksumFor(archive, requestCode == PICK_PROOT_ARCHIVE)
+            return
+        }
+        if (resultCode == RESULT_OK && requestCode == PICK_RUNTIME_CHECKSUM) {
+            val checksum = data?.data ?: return
+            val archive = pendingArchiveUri ?: return
+            val flags = data.flags and Intent.FLAG_GRANT_READ_URI_PERMISSION
+            try { contentResolver.takePersistableUriPermission(checksum, flags) } catch (_: SecurityException) { }
+            installRuntimeArchive(archive, checksum, pendingArchiveIsProot)
+            return
+        }
         if (requestCode == PICK_GAME_FOLDER && resultCode == RESULT_OK) {
             val uri = data?.data ?: return
             val flags = data.flags and (Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION)
