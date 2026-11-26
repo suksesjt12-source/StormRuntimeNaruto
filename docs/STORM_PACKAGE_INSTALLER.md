@@ -27,6 +27,8 @@ This matches the paths consumed by `StormProotHost`.
 
 ## Installer safeguards
 
+- Requires a separate `.sha256` sidecar selected by the user and verifies SHA-256 before extracting either archive.
+
 - Extracts into a fresh staging directory before switching the destination.
 - Rejects absolute archive entry paths, parent traversal, duplicate writes, hardlinks, device nodes, FIFOs, and unsupported entry types.
 - Defers symlink creation until regular files have been extracted.
@@ -37,7 +39,7 @@ This matches the paths consumed by `StormProotHost`.
 ## Current limitations / acceptance gates
 
 - The Kotlin installer implementation exists, but the launcher UI has not yet been wired to Android's document picker. It is not yet user-invokable.
-- The installer currently checks archive structure and key files; it does not yet verify a trusted SHA-256 manifest. Do not install archives from untrusted sources.
+- The installer verifies the archive against the user-selected sidecar, but this is integrity checking rather than publisher authentication. Only use checksum files obtained from the same trusted release source as the archive.
 - The APK dependency resolution and Kotlin compilation have not yet been verified by a successful CI run.
 - No PRoot execution test on Android has been completed. Android ptrace restrictions and executable-memory policy still need real-device validation.
 - A successful package installation would only prepare PRoot and Glibc. It would not make Windows PE32 execution or Naruto launch-capable.
