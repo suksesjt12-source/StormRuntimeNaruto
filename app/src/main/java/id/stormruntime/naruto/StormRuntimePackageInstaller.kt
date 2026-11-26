@@ -28,15 +28,16 @@ internal object StormRuntimePackageInstaller {
 
     data class Result(val ok: Boolean, val detail: String)
 
-    fun installProot(context: Context, archiveUri: Uri): Result =
-        install(context, archiveUri, "proot/root", "root", "storm-proot-install")
+    fun installProot(context: Context, archiveUri: Uri, checksumUri: Uri): Result =
+        install(context, archiveUri, checksumUri, "proot/root", "root", "storm-proot-install")
 
-    fun installRootfs(context: Context, archiveUri: Uri): Result =
-        install(context, archiveUri, "rootfs", "rootfs", "storm-rootfs-install")
+    fun installRootfs(context: Context, archiveUri: Uri, checksumUri: Uri): Result =
+        install(context, archiveUri, checksumUri, "rootfs", "rootfs", "storm-rootfs-install")
 
     private fun install(
         context: Context,
         uri: Uri,
+        checksumUri: Uri,
         destinationName: String,
         archiveRoot: String,
         stagingName: String
@@ -49,6 +50,11 @@ internal object StormRuntimePackageInstaller {
             if (staging.exists()) staging.deleteRecursively()
             if (backup.exists()) backup.deleteRecursively()
             if (!staging.mkdirs()) error("Tidak dapat membuat direktori staging.")
+            val expectedSha256 = readExpectedSha256(context, checksumUri)
+            val actualSha256 = calculateSha256(context, uri)
+            require(actualSha256.equals(expectedSha256, ignoreCase = true)) {
+                "SHA-256 tidak cocok. Arsip mungkin rusak atau checksum bukan pasangannya."
+            }
             val source = context.contentResolver.openInputStream(uri)
                 ?: error("File arsip tidak dapat dibuka.")
             source.use { input -> extract(input, staging, archiveRoot) }
@@ -69,6 +75,41 @@ internal object StormRuntimePackageInstaller {
             staging.deleteRecursively()
             Result(false, "Instalasi $destinationName gagal: ${error.message ?: error.javaClass.simpleName}")
         }
+    }
+
+
+    private fun readExpectedSha256(context: Context, uri: Uri): String {
+        val bytes = context.contentResolver.openInputStream(uri)?.use { input ->
+            val output = java.io.ByteArrayOutputStream()
+            val buffer = ByteArray(1024)
+            var total = 0
+            while (true) {
+                val n = input.read(buffer)
+                if (n < 0) break
+                total += n
+                require(total <= 4096) { "File checksum terlalu besar." }
+                output.write(buffer, 0, n)
+            }
+            output.toByteArray()
+        } ?: error("File checksum tidak dapat dibuka.")
+        val first = String(bytes, Charsets.UTF_8).trim().split(Regex("\\s+")).firstOrNull().orEmpty()
+        require(first.matches(Regex("[A-Fa-f0-9]{64}"))) {
+            "Format checksum tidak valid. Pilih file .sha256 yang sesuai."
+        }
+        return first.lowercase(java.util.Locale.ROOT)
+    }
+
+    private fun calculateSha256(context: Context, uri: Uri): String {
+        val digest = MessageDigest.getInstance("SHA-256")
+        context.contentResolver.openInputStream(uri)?.use { input ->
+            val buffer = ByteArray(64 * 1024)
+            while (true) {
+                val n = input.read(buffer)
+                if (n < 0) break
+                digest.update(buffer, 0, n)
+            }
+        } ?: error("Arsip tidak dapat dibaca untuk verifikasi checksum.")
+        return digest.digest().joinToString("") { "%02x".format(it) }
     }
 
     private fun extract(input: InputStream, staging: File, expectedRoot: String) {
