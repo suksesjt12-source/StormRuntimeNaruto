@@ -12,8 +12,6 @@
 
 The Android launcher remains a Bionic application. It must not load Glibc or Wine libraries into its JVM process.
 
-The intended process topology is:
-
 ```text
 Storm UI (Android Activity, Bionic process)
         |
@@ -26,11 +24,10 @@ StormRuntimeService (:storm_runtime, separate Android process)
 PRoot ARM64 host (Android/Bionic executable)
         |
         v
-Glibc ARM64 rootfs
+Debian Bookworm ARM64 Glibc rootfs
   - GNU dynamic loader and libc
-  - Wine/Hangover
-  - Box64 WoW64 translator
-  - DXVK userspace libraries
+  - base Linux utilities and selected shared libraries
+  - future Wine/Hangover and Box64 WoW64 payload
         |
         v
 Windows PE process (NSUNSR.exe)
@@ -38,43 +35,33 @@ Windows PE process (NSUNSR.exe)
 
 The service is a process boundary and control plane, not the Wine runtime itself. A separate process avoids loading the Windows compatibility stack into the Activity's JVM process. It does not by itself solve Android seccomp, ptrace, display, or signal-context requirements.
 
-## Implemented in this milestone
+## Implemented
 
 - Versioned private Messenger message identifiers.
-- A dedicated Android Service declared in process `:storm_runtime`.
-- Runtime bundle manifest validation under app-private storage at `filesDir/storm-runtime/manifest.properties`.
-- Validation of ABI, libc identity, path traversal, required payload files, and executable permissions.
-- Explicit launch gate: a valid-looking bundle is not launch-capable until a real process host, Android display path, and physical-device PE32 test exist.
+- Dedicated Android Service in process `:storm_runtime`.
+- Messenger IPC for runtime status and launch-gate requests.
+- Runtime bundle manifest validation under app-private storage.
+- Debian Bookworm ARM64 Glibc rootfs definition in `runtime/rootfs/Dockerfile`.
+- Buildx/QEMU CI workflow to export a rootfs archive, validate AArch64 ELF files and Glibc loader, record package versions, and produce a SHA-256 checksum.
+- Explicit launch gate: the app refuses to claim launch capability before a real process host, Android display path, and physical-device PE32 test exist.
 
-## Bundle manifest contract
+## Rootfs artifact
 
-The future manifest uses Java Properties syntax:
-
-```properties
-format=storm-runtime-bundle-v1
-abi=arm64-v8a
-libc=glibc
-glibc.loader=rootfs/lib/ld-linux-aarch64.so.1
-glibc.libc=rootfs/lib/aarch64-linux-gnu/libc.so.6
-proot=bin/proot
-wine=rootfs/usr/bin/wine
-box64=bin/box64
-hangover.wow64_i386=rootfs/usr/lib/wine/aarch64-windows/wowbox64.dll
-```
-
-Paths are relative to the bundle root and must remain inside it. Actual paths must match the selected, pinned Wine/Hangover build; the sample paths are a contract example, not proof that those files have been built.
+See [STORM_ROOTFS.md](STORM_ROOTFS.md). The rootfs is built separately from the APK and is not yet installed on Android. It is a minimal Linux userspace, not a complete Windows runtime. Its package inventory and provenance manifest are included with the CI artifact.
 
 ## Important ABI boundary
 
 Glibc is not a replacement for Android's Bionic libc. The Android UI and Android-side process host use the Android NDK/Bionic ABI. Linux applications that require Glibc run inside the Glibc userspace through a compatible host/PRoot arrangement. Do not mix Glibc and Bionic libraries in one process.
 
+PRoot relies on ptrace/system-call mediation. Android 14 behavior, app process policy, and device-specific restrictions must be tested on the target phone. PRoot is not a VM and does not provide a separate kernel or full security isolation.
+
 ## Not implemented yet
 
-- PRoot Android ARM64 build and syscall validation on Android 14.
-- Complete, reproducible Glibc rootfs package and installer.
-- Android-compatible Wine/Hangover display driver and process host.
-- Box64 WoW64 translator build/package matching the pinned Hangover ABI.
-- Wine prefix initialization.
+- Android-compatible PRoot ARM64 host and syscall validation on Android 14.
+- Rootfs installer, integrity verification, and lifecycle management in app-private storage.
+- Wine/Hangover runtime and Wine prefix.
+- Box64 WoW64 translator build/package matching the selected Hangover ABI.
+- Android-compatible Wine display driver and process host.
 - DXVK/D3D9 initialization and Vulkan feature validation on Mali-G57.
 - Audio/input forwarding.
 - PE32 probe execution on the physical device.
@@ -83,10 +70,10 @@ Glibc is not a replacement for Android's Bionic libc. The Android UI and Android
 ## Acceptance gates
 
 1. CI builds and packages the Android APK with the service in a separate process.
-2. Runtime manifest validator rejects wrong ABI/libc and path traversal.
-3. The packaged rootfs starts through the Android-compatible PRoot host.
+2. Rootfs CI artifact passes AArch64 ELF and loader checks.
+3. A Bionic PRoot host runs the rootfs on Android 14 without relying on a guest kernel.
 4. Wine/Hangover initializes outside the Activity process.
 5. The original PE32 probe runs and returns its expected exit code 37 on the target phone.
-6. Only after the PE32 gate passes, integrate DXVK/D3D9, audio, input, then test the game.
+6. Only after the PE32 gate passes, integrate D3D9/DXVK, audio, input, then test the game.
 
-A Gradle build, a Glibc sysroot artifact, or a manifest that lists runtime files is not evidence of Windows executable support.
+A Gradle build, a Glibc sysroot artifact, a rootfs archive, or a manifest that lists runtime files is not evidence of Windows executable support.
