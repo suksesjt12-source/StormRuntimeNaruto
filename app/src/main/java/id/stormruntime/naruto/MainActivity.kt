@@ -21,6 +21,8 @@ class MainActivity : Activity(), SurfaceHolder.Callback {
     private lateinit var surfaceStatus: TextView
     private lateinit var installerStatus: TextView
     private val installerExecutor = Executors.newSingleThreadExecutor()
+    private val surfaceProbeExecutor = Executors.newSingleThreadExecutor()
+    private var surfaceGeneration = 0
     private var installInProgress = false
     private var pendingArchiveUri: Uri? = null
     private var pendingArchiveIsProot = false
@@ -52,6 +54,33 @@ class MainActivity : Activity(), SurfaceHolder.Callback {
     override fun onStop() {
         runtimeClient.unbind()
         super.onStop()
+    }
+
+    override fun onDestroy() {
+        surfaceGeneration++
+        surfaceProbeExecutor.execute { NativeBridge.clearAndroidSurface() }
+        surfaceProbeExecutor.shutdown()
+        installerExecutor.shutdown()
+        super.onDestroy()
+    }
+
+    /** Vulkan surface creation/presentation may block; never run it on Android's UI thread. */
+    private fun probeSurface(surface: Surface? = null) {
+        val generation = ++surfaceGeneration
+        surfaceStatus.text = "Memeriksa Android Vulkan surface..."
+        surfaceProbeExecutor.execute {
+            val result = try {
+                if (surface != null) NativeBridge.setAndroidSurface(surface)
+                else NativeBridge.androidSurfaceStatus()
+            } catch (error: Exception) {
+                "Surface probe gagal: ${error.javaClass.simpleName}: ${error.message ?: "native error"}"
+            }
+            runOnUiThread {
+                if (generation == surfaceGeneration && ::surfaceStatus.isInitialized) {
+                    surfaceStatus.text = result
+                }
+            }
+        }
     }
 
     private fun buildUi() {
@@ -129,9 +158,7 @@ class MainActivity : Activity(), SurfaceHolder.Callback {
         panel.addView(label(NativeBridge.vulkanStatus()))
         panel.addView(label("Catatan: Vulkan probe bukan bukti DXVK/D3D9 siap. Service LauncherPC Core saat ini hanya memvalidasi bundle dan menolak peluncuran yang belum didukung."))
         panel.addView(button("Periksa ulang file game") { inspectGameFolder() })
-        panel.addView(button("Periksa ulang Android surface") {
-            surfaceStatus.text = NativeBridge.androidSurfaceStatus()
-        })
+        panel.addView(button("Periksa ulang Android surface") { probeSurface() })
     }
 
     private fun pickRuntimeArchive(requestCode: Int) {
@@ -213,16 +240,17 @@ class MainActivity : Activity(), SurfaceHolder.Callback {
     }
 
     override fun surfaceCreated(holder: SurfaceHolder) {
-        surfaceStatus.text = NativeBridge.setAndroidSurface(holder.surface)
+        probeSurface(holder.surface)
     }
 
     override fun surfaceChanged(holder: SurfaceHolder, format: Int, width: Int, height: Int) {
-        surfaceStatus.text = NativeBridge.androidSurfaceStatus()
+        probeSurface()
     }
 
     override fun surfaceDestroyed(holder: SurfaceHolder) {
-        NativeBridge.clearAndroidSurface()
+        surfaceGeneration++
         surfaceStatus.text = "Surface: dilepas (lifecycle destroy)"
+        surfaceProbeExecutor.execute { NativeBridge.clearAndroidSurface() }
     }
 
     private fun inspectGameFolder() {
