@@ -159,7 +159,15 @@ internal object StormProotHost {
             if (compatRoot != null) {
                 command += listOf("-b", "${compatRoot.absolutePath}:/opt/storm/compat")
             }
-            command += listOf("-w", "/root")
+            command += listOf(
+                "-w", "/root",
+                "-E", "HOME=/root",
+                "-E", "TMPDIR=/tmp",
+                "-E", "PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/opt/storm/compat/bin",
+                "-E", "LD_LIBRARY_PATH=/opt/storm/compat/lib:/opt/storm/compat/lib64:/lib/aarch64-linux-gnu:/usr/lib/aarch64-linux-gnu",
+                "-E", "LANG=C",
+                "-E", "WINEDEBUG=-all"
+            )
             command.addAll(guestCommand)
 
             val process = ProcessBuilder(command)
@@ -167,13 +175,9 @@ internal object StormProotHost {
                 .redirectErrorStream(true)
                 .redirectOutput(log)
                 .apply {
+                    // This variable is consumed by the Android-side PRoot host.
+                    // Guest-only environment is passed through PRoot's -E options.
                     environment()["PROOT_LOADER"] = prootLoader.absolutePath
-                    environment()["HOME"] = "/root"
-                    environment()["TMPDIR"] = "/tmp"
-                    environment()["PATH"] = "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/opt/storm/compat/bin"
-                    environment()["LD_LIBRARY_PATH"] = "/opt/storm/compat/lib:/opt/storm/compat/lib64:/lib/aarch64-linux-gnu:/usr/lib/aarch64-linux-gnu"
-                    environment()["LANG"] = "C"
-                    environment()["WINEDEBUG"] = "-all"
                 }
                 .start()
 
