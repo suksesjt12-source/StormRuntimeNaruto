@@ -62,6 +62,17 @@ class MainActivity : Activity(), SurfaceHolder.Callback {
         panel.addView(label("Pengaturan awal", 20f))
         panel.addView(label("Resolusi target pengujian: 960 × 540"))
         panel.addView(label("Batas FPS target: 30 FPS"))
+
+        panel.addView(label("Runtime backend", 20f))
+        panel.addView(label("Backend utama: Glibc ARM64 (belum terintegrasi)"))
+        panel.addView(label("Bionic: jalur eksperimen terpisah; tidak dipakai sebagai fallback otomatis"))
+        panel.addView(label("Status: launcher belum memuat Glibc, Wine, Box64, atau DXVK."))
+
+        panel.addView(label("Profil perangkat", 20f))
+        val deviceInfo = StormRuntimeConfig.deviceSummary()
+        panel.addView(label(deviceInfo))
+        panel.addView(label("Profil rekomendasi: " + StormRuntimeConfig.defaultProfile.summary()))
+        panel.addView(label("Catatan: nilai profil adalah konfigurasi awal yang ditampilkan, belum diterapkan ke proses game."))
         panel.addView(label("Android Vulkan surface diagnostic", 20f))
         surfaceStatus = label("Surface: menunggu SurfaceView dibuat")
         panel.addView(surfaceStatus)
