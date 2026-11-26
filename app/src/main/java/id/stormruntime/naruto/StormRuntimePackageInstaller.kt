@@ -113,6 +113,15 @@ internal object StormRuntimePackageInstaller {
                 if (relative.isNotEmpty()) props.setProperty(key, "compat/$relative")
             }
         }
+        val dxvkDlls = listOf(
+            "dxvk.d3d9.x86" to "dxvk/x32/d3d9.dll",
+            "dxvk.dxgi.x86" to "dxvk/x32/dxgi.dll",
+            "dxvk.d3d9.x64" to "dxvk/x64/d3d9.dll",
+            "dxvk.dxgi.x64" to "dxvk/x64/dxgi.dll"
+        )
+        for ((key, relative) in dxvkDlls) {
+            if (File(bundle, relative).isFile) props.setProperty(key, relative)
+        }
         val temporary = File(bundle, "manifest.properties.tmp")
         temporary.outputStream().use { props.store(it, "LauncherPC runtime bundle manifest") }
         val destination = File(bundle, "manifest.properties")
