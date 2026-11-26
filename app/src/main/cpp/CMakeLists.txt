@@ -1,7 +1,10 @@
 cmake_minimum_required(VERSION 3.22.1)
 project(stormcore)
 
-add_library(stormcore SHARED native-lib.cpp)
+add_library(stormcore SHARED
+    native-lib.cpp
+    dxvk-sarek-probe.cpp
+)
 
 find_library(ANDROID_LIB android)
 find_library(VULKAN_LIB vulkan)

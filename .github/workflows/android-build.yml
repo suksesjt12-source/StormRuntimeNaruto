@@ -2,7 +2,7 @@ name: Android APK Build
 on:
   workflow_dispatch:
   push:
-    branches: ["main", "feature/mtk-glibc-runtime"]
+    branches: ["main", "feature/mtk-glibc-runtime", "feature/launcherpc-winlator-mali"]
 
 permissions:
   contents: read
@@ -67,7 +67,7 @@ jobs:
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: storm-runtime-naruto-debug
+          name: launcherpc-debug
           path: |
             app/build/outputs/apk/debug/app-debug.apk
             APK-SHA256.txt

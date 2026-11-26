@@ -11,6 +11,8 @@ object StormRuntimeProtocol {
     const val MSG_LAUNCH_RESULT = 4
     const val MSG_RUN_GLIBC_SMOKE_TEST = 5
     const val MSG_SMOKE_TEST_RESULT = 6
+    const val MSG_RUN_COMPATIBILITY_SMOKE_TEST = 7
+    const val MSG_COMPATIBILITY_SMOKE_TEST_RESULT = 8
 
     const val KEY_STATE = "state"
     const val KEY_DETAIL = "detail"
@@ -27,4 +29,11 @@ object StormRuntimeProtocol {
     const val STATE_PROOT_TIMEOUT = "PROOT_TIMEOUT"
     const val STATE_PROOT_FAILED = "PROOT_FAILED"
     const val STATE_GLIBC_SMOKE_OK = "GLIBC_SMOKE_OK"
+    const val STATE_COMPAT_MISSING = "COMPAT_MISSING"
+    const val STATE_COMPAT_INVALID = "COMPAT_INVALID"
+    const val STATE_WINE_SMOKE_OK = "WINE_SMOKE_OK"
+    const val STATE_BOX64_SMOKE_OK = "BOX64_SMOKE_OK"
+    const val STATE_COMPAT_SMOKE_FAILED = "COMPAT_SMOKE_FAILED"
+    const val STATE_COMPAT_SMOKE_TIMEOUT = "COMPAT_SMOKE_TIMEOUT"
+    const val STATE_SMOKE_TEST_BUSY = "SMOKE_TEST_BUSY"
 }

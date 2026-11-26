@@ -84,6 +84,8 @@ internal class StormRuntimeClient(
 
     fun runGlibcSmokeTest() = send(StormRuntimeProtocol.MSG_RUN_GLIBC_SMOKE_TEST)
 
+    fun runCompatibilitySmokeTest() = send(StormRuntimeProtocol.MSG_RUN_COMPATIBILITY_SMOKE_TEST)
+
     private fun send(command: Int) {
         val target = service
         if (target == null) {

@@ -21,9 +21,13 @@ class MainActivity : Activity(), SurfaceHolder.Callback {
     private lateinit var surfaceStatus: TextView
     private lateinit var installerStatus: TextView
     private val installerExecutor = Executors.newSingleThreadExecutor()
+    private val surfaceProbeExecutor = Executors.newSingleThreadExecutor()
+    private var surfaceGeneration = 0
     private var installInProgress = false
     private var pendingArchiveUri: Uri? = null
     private var pendingArchiveIsProot = false
+    private var pendingArchiveIsCompat = false
+    private var pendingArchiveIsDxvk = false
     private lateinit var runtimeClient: StormRuntimeClient
     private var selectedTree: Uri? = null
 
@@ -32,6 +36,8 @@ class MainActivity : Activity(), SurfaceHolder.Callback {
         private const val PICK_PROOT_ARCHIVE = 4102
         private const val PICK_ROOTFS_ARCHIVE = 4103
         private const val PICK_RUNTIME_CHECKSUM = 4104
+        private const val PICK_COMPAT_ARCHIVE = 4105
+        private const val PICK_DXVK_ARCHIVE = 4106
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -40,7 +46,7 @@ class MainActivity : Activity(), SurfaceHolder.Callback {
         runtimeClient = StormRuntimeClient(this) { status ->
             if (::runtimeStatus.isInitialized) runtimeStatus.text = status
         }
-        runtimeStatus.text = "Storm Core: menunggu koneksi proses runtime"
+        runtimeStatus.text = "LauncherPC Core: menunggu koneksi proses runtime"
         exeStatus.text = "NSUNSR.exe: belum diperiksa"
     }
 
@@ -52,6 +58,33 @@ class MainActivity : Activity(), SurfaceHolder.Callback {
     override fun onStop() {
         runtimeClient.unbind()
         super.onStop()
+    }
+
+    override fun onDestroy() {
+        surfaceGeneration++
+        surfaceProbeExecutor.execute { NativeBridge.clearAndroidSurface() }
+        surfaceProbeExecutor.shutdown()
+        installerExecutor.shutdown()
+        super.onDestroy()
+    }
+
+    /** Vulkan surface creation/presentation may block; never run it on Android's UI thread. */
+    private fun probeSurface(surface: Surface? = null) {
+        val generation = ++surfaceGeneration
+        surfaceStatus.text = "Memeriksa Android Vulkan surface..."
+        surfaceProbeExecutor.execute {
+            val result = try {
+                if (surface != null) NativeBridge.setAndroidSurface(surface)
+                else NativeBridge.androidSurfaceStatus()
+            } catch (error: Exception) {
+                "Surface probe gagal: ${error.javaClass.simpleName}: ${error.message ?: "native error"}"
+            }
+            runOnUiThread {
+                if (generation == surfaceGeneration && ::surfaceStatus.isInitialized) {
+                    surfaceStatus.text = result
+                }
+            }
+        }
     }
 
     private fun buildUi() {
@@ -75,9 +108,9 @@ class MainActivity : Activity(), SurfaceHolder.Callback {
             setOnClickListener { action() }
         }
 
-        panel.addView(label("STORM RUNTIME", 26f))
+        panel.addView(label("LAUNCHERPC", 26f))
         panel.addView(label("Naruto Shippuden: Ultimate Ninja Storm Revolution"))
-        panel.addView(label("Android Native • Storm Core IPC Prototype 0.3.0"))
+        panel.addView(label("Android Native • LauncherPC Core IPC Prototype 0.3.0"))
         panel.addView(button("Pilih folder instalasi game") { pickFolder() })
         folderStatus = label("Folder game: belum dipilih")
         panel.addView(folderStatus)
@@ -91,19 +124,26 @@ class MainActivity : Activity(), SurfaceHolder.Callback {
         panel.addView(label("Pemasangan runtime", 20f))
         panel.addView(button("Pilih arsip PRoot ARM64 (.tar.gz)") { pickRuntimeArchive(PICK_PROOT_ARCHIVE) })
         panel.addView(button("Pilih arsip Glibc RootFS (.tar.xz)") { pickRuntimeArchive(PICK_ROOTFS_ARCHIVE) })
+        panel.addView(button("Pilih paket Wine + Hangover/Box64 WoW64 (.tar.gz/.tar.xz)") { pickRuntimeArchive(PICK_COMPAT_ARCHIVE) })
+        panel.addView(button("Pilih paket DXVK-Sarek 1.11.0 (.tar.gz)") { pickRuntimeArchive(PICK_DXVK_ARCHIVE) })
         installerStatus = label("Installer: belum ada paket yang dipasang.")
         panel.addView(installerStatus)
 
         panel.addView(label("Runtime backend", 20f))
-        panel.addView(label("Backend utama: Storm Core + GNU Glibc ARM64"))
-        panel.addView(label("Komponen kompatibilitas: Wine/Hangover + Box64 WoW64 + DXVK"))
-        panel.addView(label("Status: komponen runtime belum dipasang; peluncuran game tetap dikunci."))
+        panel.addView(label("Backend utama: LauncherPC Core + GNU Glibc ARM64"))
+        panel.addView(label("Komponen kompatibilitas: Wine ARM64 + Hangover wowbox64.dll + DXVK-Sarek 1.11.0"))
+        panel.addView(label("Status: DXVK-Sarek dipilih sebagai kandidat; belum dipasang atau dijalankan."))
 
         panel.addView(label("Profil perangkat", 20f))
-        val deviceInfo = StormRuntimeConfig.deviceSummary()
+        val deviceInfo = StormRuntimeConfig.deviceSummary(this)
         panel.addView(label(deviceInfo))
         panel.addView(label("Profil rekomendasi: " + StormRuntimeConfig.defaultProfile.summary))
         panel.addView(label("Catatan: nilai profil adalah konfigurasi awal yang ditampilkan, belum diterapkan ke proses game."))
+
+        panel.addView(label("DXVK-Sarek 1.11.0 • Vulkan 1.1 capability probe", 20f))
+        panel.addView(label(NativeBridge.dxvkSarekStatus()))
+        panel.addView(label("Catatan: probe ini memeriksa Vulkan 1.1, swapchain, dan queue. Uji Android surface/present tetap terpisah; belum membuktikan DLL DXVK atau D3D9 siap."))
+
         panel.addView(label("Android Vulkan surface diagnostic", 20f))
         surfaceStatus = label("Surface: menunggu SurfaceView dibuat")
         panel.addView(surfaceStatus)
@@ -114,19 +154,18 @@ class MainActivity : Activity(), SurfaceHolder.Callback {
             LinearLayout.LayoutParams.MATCH_PARENT, (220 * resources.displayMetrics.density).toInt()
         ))
 
-        panel.addView(label("Storm Core process status", 20f))
+        panel.addView(label("LauncherPC Core process status", 20f))
         runtimeStatus = label("Menunggu proses runtime...")
         panel.addView(runtimeStatus)
-        panel.addView(button("Periksa status Storm Core") { runtimeClient.queryStatus() })
+        panel.addView(button("Periksa status LauncherPC Core") { runtimeClient.queryStatus() })
         panel.addView(button("Uji PRoot + Glibc RootFS") { runtimeClient.runGlibcSmokeTest() })
+        panel.addView(button("Uji Wine + Box64 di PRoot") { runtimeClient.runCompatibilitySmokeTest() })
         panel.addView(button("Minta jalankan Naruto") { runtimeClient.requestGameLaunch() })
         panel.addView(label("Vulkan device diagnostic:"))
         panel.addView(label(NativeBridge.vulkanStatus()))
-        panel.addView(label("Catatan: Vulkan probe bukan bukti DXVK/D3D9 siap. Service Storm Core saat ini hanya memvalidasi bundle dan menolak peluncuran yang belum didukung."))
+        panel.addView(label("Catatan: Vulkan probe bukan bukti DXVK/D3D9 siap. Service LauncherPC Core saat ini hanya memvalidasi bundle dan menolak peluncuran yang belum didukung."))
         panel.addView(button("Periksa ulang file game") { inspectGameFolder() })
-        panel.addView(button("Periksa ulang Android surface") {
-            surfaceStatus.text = NativeBridge.androidSurfaceStatus()
-        })
+        panel.addView(button("Periksa ulang Android surface") { probeSurface() })
     }
 
     private fun pickRuntimeArchive(requestCode: Int) {
@@ -142,9 +181,11 @@ class MainActivity : Activity(), SurfaceHolder.Callback {
         startActivityForResult(intent, requestCode)
     }
 
-    private fun requestChecksumFor(archive: Uri, isProot: Boolean) {
+    private fun requestChecksumFor(archive: Uri, isProot: Boolean, isCompat: Boolean = false, isDxvk: Boolean = false) {
         pendingArchiveUri = archive
         pendingArchiveIsProot = isProot
+        pendingArchiveIsCompat = isCompat
+        pendingArchiveIsDxvk = isDxvk
         installerStatus.text = "Pilih file checksum .sha256 yang berasal dari paket yang sama."
         val intent = Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
             addCategory(Intent.CATEGORY_OPENABLE)
@@ -154,13 +195,23 @@ class MainActivity : Activity(), SurfaceHolder.Callback {
         startActivityForResult(intent, PICK_RUNTIME_CHECKSUM)
     }
 
-    private fun installRuntimeArchive(uri: Uri, checksumUri: Uri, isProot: Boolean) {
+    private fun installRuntimeArchive(uri: Uri, checksumUri: Uri, isProot: Boolean, isCompat: Boolean, isDxvk: Boolean) {
         if (installInProgress) return
         installInProgress = true
-        installerStatus.text = if (isProot) "Memverifikasi SHA-256 dan memasang PRoot ARM64..." else "Memverifikasi SHA-256 dan memasang Glibc RootFS..."
+        val packageLabel = when {
+            isProot -> "PRoot ARM64"
+            isCompat -> "Wine + Hangover/Box64 WoW64"
+            isDxvk -> "DXVK-Sarek 1.11.0"
+            else -> "Glibc RootFS"
+        }
+        installerStatus.text = "Memverifikasi SHA-256 dan memasang $packageLabel..."
         installerExecutor.execute {
-            val result = if (isProot) StormRuntimePackageInstaller.installProot(this, uri, checksumUri)
-                else StormRuntimePackageInstaller.installRootfs(this, uri, checksumUri)
+            val result = when {
+                isProot -> StormRuntimePackageInstaller.installProot(this, uri, checksumUri)
+                isCompat -> StormRuntimePackageInstaller.installCompatibility(this, uri, checksumUri)
+                isDxvk -> StormRuntimePackageInstaller.installDxvk(this, uri, checksumUri)
+                else -> StormRuntimePackageInstaller.installRootfs(this, uri, checksumUri)
+            }
             runOnUiThread {
                 installInProgress = false
                 pendingArchiveUri = null
@@ -182,11 +233,16 @@ class MainActivity : Activity(), SurfaceHolder.Callback {
     @Deprecated("Use Activity Result API in a later iteration")
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
         super.onActivityResult(requestCode, resultCode, data)
-        if (resultCode == RESULT_OK && requestCode in setOf(PICK_PROOT_ARCHIVE, PICK_ROOTFS_ARCHIVE)) {
+        if (resultCode == RESULT_OK && requestCode in setOf(PICK_PROOT_ARCHIVE, PICK_ROOTFS_ARCHIVE, PICK_COMPAT_ARCHIVE, PICK_DXVK_ARCHIVE)) {
             val archive = data?.data ?: return
             val flags = data.flags and Intent.FLAG_GRANT_READ_URI_PERMISSION
             try { contentResolver.takePersistableUriPermission(archive, flags) } catch (_: SecurityException) { }
-            requestChecksumFor(archive, requestCode == PICK_PROOT_ARCHIVE)
+            requestChecksumFor(
+                archive,
+                requestCode == PICK_PROOT_ARCHIVE,
+                requestCode == PICK_COMPAT_ARCHIVE,
+                requestCode == PICK_DXVK_ARCHIVE
+            )
             return
         }
         if (resultCode == RESULT_OK && requestCode == PICK_RUNTIME_CHECKSUM) {
@@ -194,7 +250,7 @@ class MainActivity : Activity(), SurfaceHolder.Callback {
             val archive = pendingArchiveUri ?: return
             val flags = data.flags and Intent.FLAG_GRANT_READ_URI_PERMISSION
             try { contentResolver.takePersistableUriPermission(checksum, flags) } catch (_: SecurityException) { }
-            installRuntimeArchive(archive, checksum, pendingArchiveIsProot)
+            installRuntimeArchive(archive, checksum, pendingArchiveIsProot, pendingArchiveIsCompat, pendingArchiveIsDxvk)
             return
         }
         if (requestCode == PICK_GAME_FOLDER && resultCode == RESULT_OK) {
@@ -208,16 +264,19 @@ class MainActivity : Activity(), SurfaceHolder.Callback {
     }
 
     override fun surfaceCreated(holder: SurfaceHolder) {
-        surfaceStatus.text = NativeBridge.setAndroidSurface(holder.surface)
+        probeSurface(holder.surface)
     }
 
     override fun surfaceChanged(holder: SurfaceHolder, format: Int, width: Int, height: Int) {
-        surfaceStatus.text = NativeBridge.androidSurfaceStatus()
+        probeSurface()
     }
 
     override fun surfaceDestroyed(holder: SurfaceHolder) {
-        NativeBridge.clearAndroidSurface()
+        surfaceGeneration++
         surfaceStatus.text = "Surface: dilepas (lifecycle destroy)"
+        if (!surfaceProbeExecutor.isShutdown) {
+            surfaceProbeExecutor.execute { NativeBridge.clearAndroidSurface() }
+        }
     }
 
     private fun inspectGameFolder() {
@@ -245,7 +304,6 @@ class MainActivity : Activity(), SurfaceHolder.Callback {
                 }
                 output.toByteArray()
             } ?: throw IllegalStateException("File tidak dapat dibaca.")
-
             val peType = inspectPe32X86(bytes)
             val fileSize = exe.length()
             exeStatus.text = when (peType) {
@@ -276,6 +334,7 @@ object NativeBridge {
     init { System.loadLibrary("stormcore") }
     external fun status(): String
     external fun vulkanStatus(): String
+    external fun dxvkSarekStatus(): String
     external fun setAndroidSurface(surface: Surface): String
     external fun androidSurfaceStatus(): String
     external fun clearAndroidSurface()

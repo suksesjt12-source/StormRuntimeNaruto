@@ -1,7 +1,7 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
     <application
         android:allowBackup="false"
-        android:label="Storm Runtime Naruto"
+        android:label="LauncherPC"
         android:theme="@android:style/Theme.Material.NoActionBar"
         android:supportsRtl="true">
         <activity
@@ -15,7 +15,7 @@
             </intent-filter>
         </activity>
 
-        <!-- Control plane only: Wine/PRoot is not loaded into the UI process. -->
+        <!-- LauncherPC control plane only: Wine/PRoot is not loaded into the UI process. -->
         <service
             android:name=".StormRuntimeService"
             android:process=":storm_runtime"

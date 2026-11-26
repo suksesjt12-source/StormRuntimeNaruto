@@ -11,6 +11,7 @@ import java.io.BufferedInputStream
 import java.io.File
 import java.io.FileInputStream
 import java.io.InputStream
+import java.io.RandomAccessFile
 import java.nio.file.Files
 import java.nio.file.Path
 import java.security.MessageDigest
@@ -33,6 +34,12 @@ internal object StormRuntimePackageInstaller {
 
     fun installRootfs(context: Context, archiveUri: Uri, checksumUri: Uri): Result =
         install(context, archiveUri, checksumUri, "rootfs", "rootfs", "storm-rootfs-install")
+
+    fun installCompatibility(context: Context, archiveUri: Uri, checksumUri: Uri): Result =
+        install(context, archiveUri, checksumUri, "compat", "compat", "storm-compat-install")
+
+    fun installDxvk(context: Context, archiveUri: Uri, checksumUri: Uri): Result =
+        install(context, archiveUri, checksumUri, "dxvk", "runtime-artifact", "storm-dxvk-install")
 
     private fun install(
         context: Context,
@@ -69,6 +76,13 @@ internal object StormRuntimePackageInstaller {
                 if (backup.exists()) backup.renameTo(destination)
                 error("Tidak dapat mengaktifkan paket baru.")
             }
+            try {
+                writeBundleManifest(bundle)
+            } catch (manifestError: Exception) {
+                destination.deleteRecursively()
+                if (backup.exists()) backup.renameTo(destination)
+                throw manifestError
+            }
             backup.deleteRecursively()
             Result(true, "Paket $destinationName berhasil diekstrak dan dipasang di penyimpanan privat aplikasi.")
         } catch (error: Exception) {
@@ -77,6 +91,54 @@ internal object StormRuntimePackageInstaller {
         }
     }
 
+
+    private fun writeBundleManifest(bundle: File) {
+        val rootfs = File(bundle, "rootfs")
+        val compat = File(bundle, "compat")
+        val compatManifest = File(compat, "manifest.properties")
+        val props = java.util.Properties()
+        props.setProperty("format", "storm-runtime-bundle-v1")
+        props.setProperty("abi", "arm64-v8a")
+        props.setProperty("libc", "glibc")
+        props.setProperty("glibc.loader", "rootfs/lib/ld-linux-aarch64.so.1")
+        val libcCandidates = listOf(
+            "lib/aarch64-linux-gnu/libc.so.6",
+            "lib/libc.so.6",
+            "usr/lib/aarch64-linux-gnu/libc.so.6"
+        )
+        val libcPath = libcCandidates.firstOrNull { File(rootfs, it).isFile }
+            ?: libcCandidates.first()
+        props.setProperty("glibc.libc", "rootfs/$libcPath")
+        props.setProperty("proot", "proot/root/bin/proot")
+        if (compatManifest.isFile) {
+            val compatProps = java.util.Properties()
+            compatManifest.inputStream().use { compatProps.load(it) }
+            for (key in listOf("wine", "box64", "hangover.wow64_i386")) {
+                val relative = compatProps.getProperty(key)?.trim().orEmpty()
+                if (relative.isNotEmpty()) props.setProperty(key, "compat/$relative")
+            }
+        }
+        val dxvkDlls = listOf(
+            "dxvk.d3d9.x86" to "dxvk/x32/d3d9.dll",
+            "dxvk.dxgi.x86" to "dxvk/x32/dxgi.dll",
+            "dxvk.d3d9.x64" to "dxvk/x64/d3d9.dll",
+            "dxvk.dxgi.x64" to "dxvk/x64/dxgi.dll"
+        )
+        for ((key, relative) in dxvkDlls) {
+            if (File(bundle, relative).isFile) props.setProperty(key, relative)
+        }
+        val temporary = File(bundle, "manifest.properties.tmp")
+        temporary.outputStream().use { props.store(it, "LauncherPC runtime bundle manifest") }
+        val destination = File(bundle, "manifest.properties")
+        if (destination.exists() && !destination.delete()) {
+            temporary.delete()
+            error("Tidak dapat mengganti manifest runtime.")
+        }
+        if (!temporary.renameTo(destination)) {
+            temporary.delete()
+            error("Tidak dapat mengaktifkan manifest runtime.")
+        }
+    }
 
     private fun readExpectedSha256(context: Context, uri: Uri): String {
         val bytes = context.contentResolver.openInputStream(uri)?.use { input ->
@@ -220,13 +282,90 @@ internal object StormRuntimePackageInstaller {
             require(loader.isFile && loader.length() > 0L) { "libexec/proot/loader tidak ditemukan." }
             require(isAarch64Elf(proot) && isAarch64Elf(loader)) { "PRoot dan loader harus ELF64 AArch64." }
             Os.chmod(proot.absolutePath, 0x1ed)
-        } else {
+        } else if (name == "rootfs") {
             val bash = File(staging, "bin/bash")
             val loader = File(staging, "lib/ld-linux-aarch64.so.1")
             require(bash.exists()) { "bin/bash tidak ditemukan." }
             require(loader.exists()) { "lib/ld-linux-aarch64.so.1 tidak ditemukan." }
+            require(isAarch64Elf(bash) && isAarch64Elf(loader)) {
+                "Bash dan dynamic loader Glibc harus ELF64 AArch64."
+            }
+        } else if (name == "dxvk") {
+            val dlls = listOf(
+                Triple("x32/d3d9.dll", 0x014c, 0x010b),
+                Triple("x32/dxgi.dll", 0x014c, 0x010b),
+                Triple("x64/d3d9.dll", 0x8664, 0x020b),
+                Triple("x64/dxgi.dll", 0x8664, 0x020b)
+            )
+            for ((relative, machine, magic) in dlls) {
+                val dll = File(staging, relative)
+                require(dll.isFile && dll.length() > 0L && isExpectedPeDll(dll, machine, magic)) {
+                    "DLL DXVK $relative tidak ditemukan atau arsitektur PE-nya salah."
+                }
+            }
+        } else if (name == "compat") {
+            val manifest = File(staging, "manifest.properties")
+            require(manifest.isFile) { "compat/manifest.properties tidak ditemukan." }
+            val properties = java.util.Properties()
+            manifest.inputStream().use { properties.load(it) }
+            require(properties.getProperty("format") == "storm-compatibility-v1") {
+                "Format manifest compatibility harus storm-compatibility-v1."
+            }
+            for (key in listOf("wine", "hangover.wow64_i386")) {
+                val relative = properties.getProperty(key)?.trim().orEmpty()
+                require(relative.isNotEmpty() && !relative.startsWith("/") &&
+                    relative.split('/').none { it == ".." }) {
+                    "Path $key kosong atau tidak aman di manifest compatibility."
+                }
+                val component = File(staging, relative).canonicalFile
+                require(component.path.startsWith(staging.canonicalPath + File.separator) &&
+                    component.isFile && component.length() > 0L) {
+                    "Komponen $key tidak ditemukan atau path keluar dari paket."
+                }
+                val validFormat = if (key == "wine") isAarch64Elf(component)
+                    else isExpectedPeDll(component, 0xAA64, 0x020b)
+                require(validFormat) {
+                    if (key == "hangover.wow64_i386")
+                        "Hangover wowbox64.dll harus PE32+ ARM64 (machine 0xAA64)."
+                    else "Wine harus ELF64 AArch64."
+                }
+                if (key == "wine") Os.chmod(component.absolutePath, 0x1ed)
+            }
+            val optionalBox64 = properties.getProperty("box64")?.trim().orEmpty()
+            if (optionalBox64.isNotEmpty()) {
+                require(!optionalBox64.startsWith("/") && optionalBox64.split('/').none { it == ".." }) {
+                    "Path box64 kosong atau tidak aman."
+                }
+                val box64 = File(staging, optionalBox64).canonicalFile
+                require(box64.path.startsWith(staging.canonicalPath + File.separator) &&
+                    box64.isFile && box64.length() > 0L && isAarch64Elf(box64)) {
+                    "Box64 opsional harus ELF64 AArch64 dan berada di dalam paket."
+                }
+                Os.chmod(box64.absolutePath, 0x1ed)
+            }
         }
     }
+
+    private fun isExpectedPeDll(file: File, expectedMachine: Int, expectedMagic: Int): Boolean = try {
+        RandomAccessFile(file, "r").use { input ->
+            if (input.length() < 0x40) return false
+            val dos = ByteArray(0x40)
+            input.readFully(dos)
+            if (dos[0] != 'M'.code.toByte() || dos[1] != 'Z'.code.toByte()) return false
+            val peOffset = java.nio.ByteBuffer.wrap(dos)
+                .order(java.nio.ByteOrder.LITTLE_ENDIAN).getInt(0x3c).toLong() and 0xffffffffL
+            if (peOffset < 0x40 || peOffset + 26 > input.length()) return false
+            input.seek(peOffset)
+            val header = ByteArray(26)
+            input.readFully(header)
+            if (header[0] != 'P'.code.toByte() || header[1] != 'E'.code.toByte() ||
+                header[2] != 0.toByte() || header[3] != 0.toByte()) return false
+            val fields = java.nio.ByteBuffer.wrap(header).order(java.nio.ByteOrder.LITTLE_ENDIAN)
+            val machine = fields.getShort(4).toInt() and 0xffff
+            val optionalMagic = fields.getShort(24).toInt() and 0xffff
+            machine == expectedMachine && optionalMagic == expectedMagic
+        }
+    } catch (_: Exception) { false }
 
     private fun isAarch64Elf(file: File): Boolean = try {
         FileInputStream(file).use { input ->
