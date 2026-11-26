@@ -7,8 +7,7 @@ import android.os.Build
 /**
  * Describes the first MediaTek-oriented runtime profile.
  *
- * These values are metadata for the launcher only. They are NOT applied to a
- * Wine/Box64 process until a real Android runtime host is integrated.
+ * These values are launcher metadata until a real runtime host applies them.
  */
 data class StormPerformanceProfile(
     val name: String,
@@ -21,23 +20,24 @@ data class StormPerformanceProfile(
     val maxRuntimeMemoryMiB: Int
 ) {
     val summary: String
-        get() = "$name • ${width}×${height} • ${frameLimit} FPS cap • Box64 $box64Preset • DXVK $dxvkVersion${if (dxvkAsync) " Async" else ""} • memory budget $maxRuntimeMemoryMiB MiB"
+        get() = "$name • ${width}×${height} • ${frameLimit} FPS cap • Box64 $box64Preset • $dxvkVersion • memory budget $maxRuntimeMemoryMiB MiB"
 }
 
 object StormRuntimeConfig {
     const val PRIMARY_BACKEND = "glibc-arm64"
     const val EXPERIMENTAL_BACKEND = "bionic-arm64"
+    const val DXVK_DISTRIBUTION = "DXVK-Sarek"
+    const val DXVK_VERSION = "1.11.0"
+    const val DXVK_GIT_TAG = "v1.11.0"
 
-    // Conservative starting point based on the user's previously tested 960×540 profile.
-    // This is a proposal, not a benchmark or a live runtime setting.
     val defaultProfile = StormPerformanceProfile(
         name = "Helio G100 Balanced",
         width = 960,
         height = 540,
         frameLimit = 30,
         box64Preset = "Performance",
-        dxvkVersion = "1.10.3",
-        dxvkAsync = true,
+        dxvkVersion = "Sarek $DXVK_VERSION",
+        dxvkAsync = false,
         maxRuntimeMemoryMiB = 2048
     )
 
