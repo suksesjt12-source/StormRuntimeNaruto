@@ -37,6 +37,17 @@ LauncherPC verifies the selected archive against a separately selected SHA-256 f
 
 After each package installation, LauncherPC writes a top-level `storm-runtime-bundle-v1` manifest. The bundle is considered incomplete until PRoot, the Glibc rootfs, Wine, Box64 and the Hangover WoW64 bridge are all present.
 
+
+## DXVK-Sarek package
+
+The DXVK-Sarek CI archive is installed separately from the ARM64 compatibility package. Select the `launcherpc-dxvk-sarek-1.11.0-windows-dlls.tar.gz` artifact and its matching SHA-256 file in the launcher. The archive root is `runtime-artifact/`; it must contain:
+
+- `x32/d3d9.dll` and `x32/dxgi.dll` as PE32 x86 DLLs (machine `0x014c`, optional-header magic `0x010b`).
+- `x64/d3d9.dll` and `x64/dxgi.dll` as PE32+ x86-64 DLLs (machine `0x8664`, optional-header magic `0x020b`).
+- Build provenance and license files from the pinned DXVK-Sarek source build.
+
+LauncherPC validates the PE machine type and optional-header magic before installing the files into `files/storm-runtime/dxvk/`. It records their paths in the runtime manifest. The files are not copied into a Wine prefix and are not loaded by a game process yet; renderer selection and DLL loading remain a later integration stage.
+
 ## Important limitations
 
 - A SHA-256 match detects corruption but does not authenticate who produced a package. Use packages from trusted, pinned source builds.
