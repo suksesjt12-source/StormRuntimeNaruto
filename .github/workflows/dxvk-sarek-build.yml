@@ -78,7 +78,7 @@ jobs:
           Target DLL architectures: Win32 x86 and Win64 x86_64
           Note: This artifact is a component build only. It is not an Android APK and has not been tested on Mali hardware.
           INFO
-          find runtime-artifact -type f -print0 | sort -z | xargs -0 sha256sum > runtime-artifact/SHA256SUMS
+          find runtime-artifact -type f ! -name SHA256SUMS -print0 | sort -z | xargs -0 sha256sum > runtime-artifact/SHA256SUMS
           tar -czf launcherpc-dxvk-sarek-1.11.0-windows-dlls.tar.gz runtime-artifact
 
       - name: Upload DXVK-Sarek component artifact
