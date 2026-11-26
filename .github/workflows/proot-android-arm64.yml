@@ -24,7 +24,7 @@ jobs:
       - name: Install build tools
         run: |
           sudo apt-get update
-          sudo apt-get install -y build-essential wget tar gzip binutils
+          sudo apt-get install -y build-essential wget tar gzip binutils python3-lib2to3
 
       - name: Set up Java for Android SDK
         uses: actions/setup-java@v4
@@ -49,7 +49,14 @@ jobs:
       - name: Build Android Bionic PRoot for ARM64
         run: |
           cd "$RUNNER_TEMP/proot-builder"
-          ./build.sh
+          # Upstream talloc 2.1.14 bundles a Python-2-only Waf. Convert its
+          # build scripts to Python 3 after download and before invoking make.
+          ./get-talloc.sh
+          find "$RUNNER_TEMP/proot-builder/build/talloc-2.1.14" -type f -name '*.py' -print0 | xargs -0 -r 2to3 -w -n
+          ./get-proot.sh
+          ./make-talloc-static.sh
+          ./make-proot.sh
+          ./pack.sh
 
       - name: Validate PRoot package
         run: |
