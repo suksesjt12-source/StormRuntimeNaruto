@@ -322,8 +322,17 @@ internal object StormRuntimePackageInstaller {
                     component.isFile && component.length() > 0L) {
                     "Komponen $key tidak ditemukan atau path keluar dari paket."
                 }
-                require(isAarch64Elf(component)) {
-                    "Komponen $key harus berupa ELF64 AArch64."
+                val validFormat = when (key) {
+                    "wine", "box64" -> isAarch64Elf(component)
+                    // Hangover's wowbox64.dll is a PE32+ ARM64 emulator DLL,
+                    // not a Linux ELF executable.
+                    "hangover.wow64_i386" -> isExpectedPeDll(component, 0xAA64, 0x020b)
+                    else -> false
+                }
+                require(validFormat) {
+                    if (key == "hangover.wow64_i386")
+                        "Hangover wowbox64.dll harus PE32+ ARM64 (machine 0xAA64)."
+                    else "Komponen $key harus ELF64 AArch64."
                 }
                 if (key == "wine" || key == "box64") {
                     Os.chmod(component.absolutePath, 0x1ed)
