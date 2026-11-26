@@ -76,8 +76,14 @@ internal object StormRuntimePackageInstaller {
                 if (backup.exists()) backup.renameTo(destination)
                 error("Tidak dapat mengaktifkan paket baru.")
             }
+            try {
+                writeBundleManifest(bundle)
+            } catch (manifestError: Exception) {
+                destination.deleteRecursively()
+                if (backup.exists()) backup.renameTo(destination)
+                throw manifestError
+            }
             backup.deleteRecursively()
-            writeBundleManifest(bundle)
             Result(true, "Paket $destinationName berhasil diekstrak dan dipasang di penyimpanan privat aplikasi.")
         } catch (error: Exception) {
             staging.deleteRecursively()
@@ -88,7 +94,6 @@ internal object StormRuntimePackageInstaller {
 
     private fun writeBundleManifest(bundle: File) {
         val rootfs = File(bundle, "rootfs")
-        val proot = File(bundle, "proot/root/bin/proot")
         val compat = File(bundle, "compat")
         val compatManifest = File(compat, "manifest.properties")
         val props = java.util.Properties()
