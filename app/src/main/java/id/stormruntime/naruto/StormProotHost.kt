@@ -91,10 +91,10 @@ internal object StormProotHost {
         if (absent.isNotEmpty()) {
             return RuntimeValidation(StormRuntimeProtocol.STATE_COMPAT_MISSING, "Paket kompatibilitas belum lengkap.", absent)
         }
-        if (!isAarch64Elf(wine!!) || !isAarch64Elf(box64!!) || !isAarch64Elf(hangover!!)) {
+        if (!isAarch64Elf(wine!!) || !isAarch64Elf(box64!!) || !isArm64PeDll(hangover!!)) {
             return RuntimeValidation(
                 StormRuntimeProtocol.STATE_COMPAT_INVALID,
-                "Wine, Box64, dan Hangover bridge harus ELF64 little-endian AArch64."
+                "Wine dan Box64 harus ELF64 AArch64; Hangover wowbox64.dll harus PE32+ ARM64."
             )
         }
 
@@ -223,6 +223,27 @@ internal object StormProotHost {
         }
         return null
     }
+
+    private fun isArm64PeDll(file: File): Boolean = try {
+        RandomAccessFile(file, "r").use { input ->
+            if (input.length() < 0x40) return false
+            val dos = ByteArray(0x40)
+            input.readFully(dos)
+            if (dos[0] != 'M'.code.toByte() || dos[1] != 'Z'.code.toByte()) return false
+            val peOffset = java.nio.ByteBuffer.wrap(dos)
+                .order(java.nio.ByteOrder.LITTLE_ENDIAN).getInt(0x3c).toLong() and 0xffffffffL
+            if (peOffset < 0x40 || peOffset + 26 > input.length()) return false
+            input.seek(peOffset)
+            val header = ByteArray(26)
+            input.readFully(header)
+            if (header[0] != 'P'.code.toByte() || header[1] != 'E'.code.toByte() ||
+                header[2] != 0.toByte() || header[3] != 0.toByte()) return false
+            val fields = java.nio.ByteBuffer.wrap(header).order(java.nio.ByteOrder.LITTLE_ENDIAN)
+            val machine = fields.getShort(4).toInt() and 0xffff
+            val optionalMagic = fields.getShort(24).toInt() and 0xffff
+            machine == 0xAA64 && optionalMagic == 0x020b
+        }
+    } catch (_: Exception) { false }
 
     private fun isAarch64Elf(file: File): Boolean = try {
         RandomAccessFile(file, "r").use { input ->
