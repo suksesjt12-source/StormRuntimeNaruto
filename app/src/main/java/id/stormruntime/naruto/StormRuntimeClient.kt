@@ -82,6 +82,8 @@ internal class StormRuntimeClient(
 
     fun requestGameLaunch() = send(StormRuntimeProtocol.MSG_REQUEST_GAME_LAUNCH)
 
+    fun runGlibcSmokeTest() = send(StormRuntimeProtocol.MSG_RUN_GLIBC_SMOKE_TEST)
+
     private fun send(command: Int) {
         val target = service
         if (target == null) {
