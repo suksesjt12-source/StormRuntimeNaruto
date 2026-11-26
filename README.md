@@ -13,6 +13,7 @@ This repository is an experimental Android ARM64 project targeting the original 
 - Custom Storm Core control-plane service hosted in a separate Android process (`:storm_runtime`).
 - Messenger IPC between launcher and Storm Core.
 - Glibc runtime bundle manifest validation.
+- PRoot smoke-test supervisor with AArch64 ELF checks, bounded execution, timeout, and launcher control; requires a separately supplied Bionic PRoot binary and installed rootfs.
 - Debian Bookworm ARM64 Glibc rootfs definition, Buildx/QEMU CI workflow, ELF ABI validation, package inventory, and checksummed rootfs artifact workflow.
 
 ## Runtime status — NOT GAME-CAPABLE YET
@@ -28,6 +29,7 @@ The Android launcher and Android-side host use Bionic. GNU Glibc is intended for
 - [Storm Core architecture](docs/STORM_CORE_ARCHITECTURE.md)
 - [Glibc ARM64 sysroot](docs/GLIBC_ARM64_SYSROOT.md)
 - [Debian ARM64 Glibc rootfs](docs/STORM_ROOTFS.md)
+- [Storm PRoot host — Stage 3](docs/STORM_PROOT_HOST.md)
 - [Compatibility audit](docs/COMPATIBILITY_AUDIT.md)
 - [Android Wine/Hangover porting audit](docs/ANDROID_WINE_HANGOVER_PORTING_AUDIT.md)
 
@@ -39,7 +41,7 @@ Box86 is not treated as a standalone Windows executable translator: upstream Box
 
 ## Still not integrated
 
-- Android-compatible PRoot ARM64 host and on-device syscall validation.
+- Build and package an Android/Bionic-compatible PRoot ARM64 host, then validate ptrace/syscall behavior on Android 14.
 - Rootfs installer and lifecycle management in app-private storage.
 - Wine/Hangover runtime and Wine prefix.
 - Matching i386 WoW64 translator.
