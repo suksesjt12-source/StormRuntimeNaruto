@@ -26,10 +26,10 @@ The exact Hangover library location is selected by the package manifest. Do not 
 format=storm-compatibility-v1
 wine=bin/wine
 box64=bin/box64
-hangover.wow64_i386=lib/hangover/<actual-relative-path-to-arm64-i386-wow64-bridge>
+hangover.wow64_i386=lib/wine/aarch64-windows/wowbox64.dll
 ```
 
-All three referenced files must exist, be non-empty ELF64 little-endian AArch64 binaries or shared objects, and remain inside the package directory. Wine and Box64 are marked executable by the installer.
+Wine and Box64 must be non-empty ELF64 little-endian AArch64 executables. The Hangover `wowbox64.dll` must be a PE32+ ARM64 DLL (machine `0xAA64`, optional-header magic `0x020b`). All files must remain inside the package directory. Wine and Box64 are marked executable by the installer.
 
 ## Installation checks
 
@@ -51,6 +51,6 @@ LauncherPC validates the PE machine type and optional-header magic before instal
 ## Important limitations
 
 - A SHA-256 match detects corruption but does not authenticate who produced a package. Use packages from trusted, pinned source builds.
-- This format does not build or bundle Wine, Hangover, Box64 or Glibc. Those native components still need reproducible source builds and licensing/provenance records.
+- This format does not build or bundle Wine, Hangover, Box64 or Glibc. Those components still need reproducible source builds and licensing/provenance records.
 - Detecting the files does not prove that Wine starts, that Hangover translates PE32 correctly, or that a Windows game can launch.
 - The game launch gate remains closed until the runtime process host, display integration, input/audio bridges, PE32 smoke tests and device tests are implemented and verified.
