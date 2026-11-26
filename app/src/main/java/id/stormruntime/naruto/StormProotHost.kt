@@ -84,8 +84,10 @@ internal object StormProotHost {
         val hangover = resolveCompat("hangover.wow64_i386")
         val absent = listOf(
             "wine" to wine, "box64" to box64, "hangover.wow64_i386" to hangover
-        ).filter { it.second == null || !it.second.isFile || it.second.length() == 0L }
-            .map { "Komponen ${it.first} belum tersedia atau path manifest tidak valid." }
+        ).filter { entry ->
+            val file = entry.second
+            file == null || !file.isFile || file.length() == 0L
+        }.map { entry -> "Komponen ${entry.first} belum tersedia atau path manifest tidak valid." }
         if (absent.isNotEmpty()) {
             return RuntimeValidation(StormRuntimeProtocol.STATE_COMPAT_MISSING, "Paket kompatibilitas belum lengkap.", absent)
         }
