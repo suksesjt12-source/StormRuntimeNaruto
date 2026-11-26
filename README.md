@@ -22,7 +22,7 @@ This repository is an experimental Android ARM64 project targeting the original 
 
 The selected architecture is Hybrid Custom: Storm Core owns process orchestration, configuration, component validation, and IPC; Wine/Hangover, Box64 WoW64, and DXVK remain upstream compatibility components to be built and integrated.
 
-The Android launcher and Android-side host use Bionic. GNU Glibc is intended for a separate AArch64 Linux userspace. Do not load Glibc and Bionic libraries into the same process. The Storm Core service is currently a control plane; it does not yet start PRoot, Wine, Hangover, Box64, or a Windows process.
+The Android launcher and Android-side host use Bionic. GNU Glibc is intended for a separate AArch64 Linux userspace. Do not load Glibc and Bionic libraries into the same process. Storm Core now has a bounded PRoot smoke-test supervisor, but it does not bundle PRoot or install the rootfs; it does not yet start Wine, Hangover, Box64, or a Windows process.
 
 ## Runtime architecture and status
 
@@ -35,13 +35,13 @@ The Android launcher and Android-side host use Bionic. GNU Glibc is intended for
 
 The rootfs workflow builds a minimal Debian Bookworm ARM64 userspace and uploads it as a separate artifact. It is not included in the APK and is not yet installed on the phone. A successful rootfs workflow proves archive assembly and ELF architecture checks on CI only.
 
-The rootfs does not contain PRoot, Wine, Hangover, Box64 WoW64, DXVK, an Android Vulkan/display bridge, or game files. PRoot must be built or selected as an Android-compatible Bionic executable and validated against Android 14 ptrace/system-call behavior before it can host the Glibc userspace.
+The rootfs does not contain PRoot, Wine, Hangover, Box64 WoW64, DXVK, an Android Vulkan/display bridge, or game files. The PRoot smoke-test code expects a separately supplied Android-compatible Bionic executable and a separately installed rootfs. Neither is bundled or installed by the current APK. PRoot must still be validated against Android 14 ptrace/system-call behavior before it can host the Glibc userspace.
 
 Box86 is not treated as a standalone Windows executable translator: upstream Box86 targets x86 Linux userspace and requires a 32-bit ARM host userspace.
 
 ## Still not integrated
 
-- Build and package an Android/Bionic-compatible PRoot ARM64 host, then validate ptrace/syscall behavior on Android 14.
+- Build, package, and install an Android/Bionic-compatible PRoot ARM64 host, then validate ptrace/syscall behavior on Android 14.
 - Rootfs installer and lifecycle management in app-private storage.
 - Wine/Hangover runtime and Wine prefix.
 - Matching i386 WoW64 translator.
