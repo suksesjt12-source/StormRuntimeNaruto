@@ -22,6 +22,8 @@ class MainActivity : Activity(), SurfaceHolder.Callback {
     private lateinit var installerStatus: TextView
     private val installerExecutor = Executors.newSingleThreadExecutor()
     private var installInProgress = false
+    private var pendingArchiveUri: Uri? = null
+    private var pendingArchiveIsProot = false
     private lateinit var runtimeClient: StormRuntimeClient
     private var selectedTree: Uri? = null
 
@@ -29,6 +31,7 @@ class MainActivity : Activity(), SurfaceHolder.Callback {
         private const val PICK_GAME_FOLDER = 4101
         private const val PICK_PROOT_ARCHIVE = 4102
         private const val PICK_ROOTFS_ARCHIVE = 4103
+        private const val PICK_RUNTIME_CHECKSUM = 4104
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -139,15 +142,28 @@ class MainActivity : Activity(), SurfaceHolder.Callback {
         startActivityForResult(intent, requestCode)
     }
 
-    private fun installRuntimeArchive(uri: Uri, isProot: Boolean) {
+    private fun requestChecksumFor(archive: Uri, isProot: Boolean) {
+        pendingArchiveUri = archive
+        pendingArchiveIsProot = isProot
+        installerStatus.text = "Pilih file checksum .sha256 yang berasal dari paket yang sama."
+        val intent = Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
+            addCategory(Intent.CATEGORY_OPENABLE)
+            type = "text/plain"
+            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION)
+        }
+        startActivityForResult(intent, PICK_RUNTIME_CHECKSUM)
+    }
+
+    private fun installRuntimeArchive(uri: Uri, checksumUri: Uri, isProot: Boolean) {
         if (installInProgress) return
         installInProgress = true
-        installerStatus.text = if (isProot) "Memasang PRoot ARM64..." else "Memasang Glibc RootFS..."
+        installerStatus.text = if (isProot) "Memverifikasi SHA-256 dan memasang PRoot ARM64..." else "Memverifikasi SHA-256 dan memasang Glibc RootFS..."
         installerExecutor.execute {
-            val result = if (isProot) StormRuntimePackageInstaller.installProot(this, uri)
-                else StormRuntimePackageInstaller.installRootfs(this, uri)
+            val result = if (isProot) StormRuntimePackageInstaller.installProot(this, uri, checksumUri)
+                else StormRuntimePackageInstaller.installRootfs(this, uri, checksumUri)
             runOnUiThread {
                 installInProgress = false
+                pendingArchiveUri = null
                 installerStatus.text = result.detail
                 runtimeClient.queryStatus()
             }
@@ -170,7 +186,15 @@ class MainActivity : Activity(), SurfaceHolder.Callback {
             val archive = data?.data ?: return
             val flags = data.flags and Intent.FLAG_GRANT_READ_URI_PERMISSION
             try { contentResolver.takePersistableUriPermission(archive, flags) } catch (_: SecurityException) { }
-            installRuntimeArchive(archive, requestCode == PICK_PROOT_ARCHIVE)
+            requestChecksumFor(archive, requestCode == PICK_PROOT_ARCHIVE)
+            return
+        }
+        if (resultCode == RESULT_OK && requestCode == PICK_RUNTIME_CHECKSUM) {
+            val checksum = data?.data ?: return
+            val archive = pendingArchiveUri ?: return
+            val flags = data.flags and Intent.FLAG_GRANT_READ_URI_PERMISSION
+            try { contentResolver.takePersistableUriPermission(checksum, flags) } catch (_: SecurityException) { }
+            installRuntimeArchive(archive, checksum, pendingArchiveIsProot)
             return
         }
         if (requestCode == PICK_GAME_FOLDER && resultCode == RESULT_OK) {
