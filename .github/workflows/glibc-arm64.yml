@@ -19,6 +19,14 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          ref: feature/mtk-glibc-runtime
+      - name: Verify build inputs
+        run: |
+          set -euo pipefail
+          git rev-parse HEAD
+          test -f scripts/build-glibc-arm64.sh
+          test -x scripts/build-glibc-arm64.sh || chmod +x scripts/build-glibc-arm64.sh
       - name: Install ARM64 cross toolchain
         run: |
           sudo apt-get update
