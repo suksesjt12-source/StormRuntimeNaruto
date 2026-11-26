@@ -11,6 +11,7 @@ import java.io.BufferedInputStream
 import java.io.File
 import java.io.FileInputStream
 import java.io.InputStream
+import java.io.RandomAccessFile
 import java.nio.file.Files
 import java.nio.file.Path
 import java.security.MessageDigest
@@ -36,6 +37,9 @@ internal object StormRuntimePackageInstaller {
 
     fun installCompatibility(context: Context, archiveUri: Uri, checksumUri: Uri): Result =
         install(context, archiveUri, checksumUri, "compat", "compat", "storm-compat-install")
+
+    fun installDxvk(context: Context, archiveUri: Uri, checksumUri: Uri): Result =
+        install(context, archiveUri, checksumUri, "dxvk", "runtime-artifact", "storm-dxvk-install")
 
     private fun install(
         context: Context,
@@ -272,6 +276,19 @@ internal object StormRuntimePackageInstaller {
             require(isAarch64Elf(bash) && isAarch64Elf(loader)) {
                 "Bash dan dynamic loader Glibc harus ELF64 AArch64."
             }
+        } else if (name == "dxvk") {
+            val dlls = listOf(
+                Triple("x32/d3d9.dll", 0x014c, 0x010b),
+                Triple("x32/dxgi.dll", 0x014c, 0x010b),
+                Triple("x64/d3d9.dll", 0x8664, 0x020b),
+                Triple("x64/dxgi.dll", 0x8664, 0x020b)
+            )
+            for ((relative, machine, magic) in dlls) {
+                val dll = File(staging, relative)
+                require(dll.isFile && dll.length() > 0L && isExpectedPeDll(dll, machine, magic)) {
+                    "DLL DXVK $relative tidak ditemukan atau arsitektur PE-nya salah."
+                }
+            }
         } else if (name == "compat") {
             val manifest = File(staging, "manifest.properties")
             require(manifest.isFile) { "compat/manifest.properties tidak ditemukan." }
@@ -300,6 +317,27 @@ internal object StormRuntimePackageInstaller {
             }
         }
     }
+
+    private fun isExpectedPeDll(file: File, expectedMachine: Int, expectedMagic: Int): Boolean = try {
+        RandomAccessFile(file, "r").use { input ->
+            if (input.length() < 0x40) return false
+            val dos = ByteArray(0x40)
+            input.readFully(dos)
+            if (dos[0] != 'M'.code.toByte() || dos[1] != 'Z'.code.toByte()) return false
+            val peOffset = java.nio.ByteBuffer.wrap(dos)
+                .order(java.nio.ByteOrder.LITTLE_ENDIAN).getInt(0x3c).toLong() and 0xffffffffL
+            if (peOffset < 0x40 || peOffset + 26 > input.length()) return false
+            input.seek(peOffset)
+            val header = ByteArray(26)
+            input.readFully(header)
+            if (header[0] != 'P'.code.toByte() || header[1] != 'E'.code.toByte() ||
+                header[2] != 0.toByte() || header[3] != 0.toByte()) return false
+            val fields = java.nio.ByteBuffer.wrap(header).order(java.nio.ByteOrder.LITTLE_ENDIAN)
+            val machine = fields.getShort(4).toInt() and 0xffff
+            val optionalMagic = fields.getShort(24).toInt() and 0xffff
+            machine == expectedMachine && optionalMagic == expectedMagic
+        }
+    } catch (_: Exception) { false }
 
     private fun isAarch64Elf(file: File): Boolean = try {
         FileInputStream(file).use { input ->
