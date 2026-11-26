@@ -30,6 +30,7 @@ The Android launcher and Android-side host use Bionic. GNU Glibc is intended for
 - [Glibc ARM64 sysroot](docs/GLIBC_ARM64_SYSROOT.md)
 - [Debian ARM64 Glibc rootfs](docs/STORM_ROOTFS.md)
 - [Storm PRoot host — Stage 3](docs/STORM_PROOT_HOST.md)
+- Android Bionic PRoot ARM64 build: `.github/workflows/proot-android-arm64.yml` (workflow artifact; not yet installed into the APK).
 - [Compatibility audit](docs/COMPATIBILITY_AUDIT.md)
 - [Android Wine/Hangover porting audit](docs/ANDROID_WINE_HANGOVER_PORTING_AUDIT.md)
 
