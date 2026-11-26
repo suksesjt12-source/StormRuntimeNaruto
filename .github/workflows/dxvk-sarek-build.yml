@@ -1,0 +1,90 @@
+name: Build DXVK-Sarek 1.11.0
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - feature/launcherpc-winlator-mali
+    paths:
+      - ".github/workflows/dxvk-sarek-build.yml"
+      - "runtime/launcherpc/components.json"
+
+permissions:
+  contents: read
+
+jobs:
+  build-dxvk-sarek:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout LauncherPC
+        uses: actions/checkout@v4
+
+      - name: Install cross-build dependencies
+        run: |
+          sudo dpkg --add-architecture i386
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            git ca-certificates python3 meson ninja-build glslang-tools \
+            gcc-mingw-w64-i686-posix g++-mingw-w64-i686-posix \
+            gcc-mingw-w64-x86-64-posix g++-mingw-w64-x86-64-posix \
+            binutils-mingw-w64 mingw-w64-tools wine64
+
+      - name: Select POSIX-threaded MinGW toolchains
+        run: |
+          sudo update-alternatives --set i686-w64-mingw32-gcc /usr/bin/i686-w64-mingw32-gcc-posix
+          sudo update-alternatives --set i686-w64-mingw32-g++ /usr/bin/i686-w64-mingw32-g++-posix
+          sudo update-alternatives --set x86_64-w64-mingw32-gcc /usr/bin/x86_64-w64-mingw32-gcc-posix
+          sudo update-alternatives --set x86_64-w64-mingw32-g++ /usr/bin/x86_64-w64-mingw32-g++-posix
+          meson --version
+          ninja --version
+          glslangValidator --version
+          i686-w64-mingw32-g++ --version
+          x86_64-w64-mingw32-g++ --version
+
+      - name: Fetch pinned DXVK-Sarek source
+        run: |
+          git clone --branch v1.11.0 --recurse-submodules --depth 1 \
+            https://github.com/pythonlover02/DXVK-Sarek.git "$RUNNER_TEMP/DXVK-Sarek"
+          cd "$RUNNER_TEMP/DXVK-Sarek"
+          git rev-parse HEAD | tee "$GITHUB_WORKSPACE/dxvk-sarek-source-commit.txt"
+          git rev-parse HEAD | grep -q '^7c0e3b2'
+
+      - name: Build 32-bit and 64-bit Windows DLLs
+        run: |
+          mkdir -p "$RUNNER_TEMP/dxvk-output"
+          cd "$RUNNER_TEMP/DXVK-Sarek"
+          ./package-release.sh v1.11.0 "$RUNNER_TEMP/dxvk-output" --no-package
+          test -s "$RUNNER_TEMP/dxvk-output/dxvk-v1.11.0/x32/d3d9.dll"
+          test -s "$RUNNER_TEMP/dxvk-output/dxvk-v1.11.0/x64/d3d9.dll"
+          test -s "$RUNNER_TEMP/dxvk-output/dxvk-v1.11.0/x32/dxgi.dll"
+          test -s "$RUNNER_TEMP/dxvk-output/dxvk-v1.11.0/x64/dxgi.dll"
+          file "$RUNNER_TEMP/dxvk-output/dxvk-v1.11.0/x32/d3d9.dll"
+          file "$RUNNER_TEMP/dxvk-output/dxvk-v1.11.0/x64/d3d9.dll"
+
+      - name: Create provenance manifest and archive
+        run: |
+          mkdir -p runtime-artifact
+          cp dxvk-sarek-source-commit.txt runtime-artifact/
+          cp "$RUNNER_TEMP/DXVK-Sarek/LICENSE" runtime-artifact/
+          cp -a "$RUNNER_TEMP/dxvk-output/dxvk-v1.11.0/x32" runtime-artifact/
+          cp -a "$RUNNER_TEMP/dxvk-output/dxvk-v1.11.0/x64" runtime-artifact/
+          cat > runtime-artifact/BUILD-INFO.txt <<'INFO'
+          Product: LauncherPC
+          Component: DXVK-Sarek
+          Version: 1.11.0
+          Release: Red River
+          Source: https://github.com/pythonlover02/DXVK-Sarek
+          Tag: v1.11.0
+          Target DLL architectures: Win32 x86 and Win64 x86_64
+          Note: This artifact is a component build only. It is not an Android APK and has not been tested on Mali hardware.
+          INFO
+          find runtime-artifact -type f -print0 | sort -z | xargs -0 sha256sum > runtime-artifact/SHA256SUMS
+          tar -czf launcherpc-dxvk-sarek-1.11.0-windows-dlls.tar.gz runtime-artifact
+
+      - name: Upload DXVK-Sarek component artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: launcherpc-dxvk-sarek-1.11.0
+          path: launcherpc-dxvk-sarek-1.11.0-windows-dlls.tar.gz
+          if-no-files-found: error
+          retention-days: 30
