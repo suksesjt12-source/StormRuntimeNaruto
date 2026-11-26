@@ -8,6 +8,7 @@ import android.view.Surface
 import android.view.SurfaceHolder
 import android.view.SurfaceView
 import android.widget.*
+import java.util.concurrent.Executors
 import androidx.documentfile.provider.DocumentFile
 import java.io.ByteArrayOutputStream
 import java.nio.ByteBuffer
@@ -18,10 +19,17 @@ class MainActivity : Activity(), SurfaceHolder.Callback {
     private lateinit var exeStatus: TextView
     private lateinit var runtimeStatus: TextView
     private lateinit var surfaceStatus: TextView
+    private lateinit var installerStatus: TextView
+    private val installerExecutor = Executors.newSingleThreadExecutor()
+    private var installInProgress = false
     private lateinit var runtimeClient: StormRuntimeClient
     private var selectedTree: Uri? = null
 
-    companion object { private const val PICK_GAME_FOLDER = 4101 }
+    companion object {
+        private const val PICK_GAME_FOLDER = 4101
+        private const val PICK_PROOT_ARCHIVE = 4102
+        private const val PICK_ROOTFS_ARCHIVE = 4103
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -77,6 +85,12 @@ class MainActivity : Activity(), SurfaceHolder.Callback {
         panel.addView(label("Resolusi target pengujian: 960 × 540"))
         panel.addView(label("Batas FPS target: 30 FPS"))
 
+        panel.addView(label("Pemasangan runtime", 20f))
+        panel.addView(button("Pilih arsip PRoot ARM64 (.tar.gz)") { pickRuntimeArchive(PICK_PROOT_ARCHIVE) })
+        panel.addView(button("Pilih arsip Glibc RootFS (.tar.xz)") { pickRuntimeArchive(PICK_ROOTFS_ARCHIVE) })
+        installerStatus = label("Installer: belum ada paket yang dipasang.")
+        panel.addView(installerStatus)
+
         panel.addView(label("Runtime backend", 20f))
         panel.addView(label("Backend utama: Storm Core + GNU Glibc ARM64"))
         panel.addView(label("Komponen kompatibilitas: Wine/Hangover + Box64 WoW64 + DXVK"))
@@ -112,6 +126,34 @@ class MainActivity : Activity(), SurfaceHolder.Callback {
         })
     }
 
+    private fun pickRuntimeArchive(requestCode: Int) {
+        if (installInProgress) {
+            installerStatus.text = "Installer sedang bekerja. Tunggu sampai selesai."
+            return
+        }
+        val intent = Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
+            addCategory(Intent.CATEGORY_OPENABLE)
+            type = "application/octet-stream"
+            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION)
+        }
+        startActivityForResult(intent, requestCode)
+    }
+
+    private fun installRuntimeArchive(uri: Uri, isProot: Boolean) {
+        if (installInProgress) return
+        installInProgress = true
+        installerStatus.text = if (isProot) "Memasang PRoot ARM64..." else "Memasang Glibc RootFS..."
+        installerExecutor.execute {
+            val result = if (isProot) StormRuntimePackageInstaller.installProot(this, uri)
+                else StormRuntimePackageInstaller.installRootfs(this, uri)
+            runOnUiThread {
+                installInProgress = false
+                installerStatus.text = result.detail
+                runtimeClient.queryStatus()
+            }
+        }
+    }
+
     private fun pickFolder() {
         val intent = Intent(Intent.ACTION_OPEN_DOCUMENT_TREE).apply {
             addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or
@@ -124,6 +166,13 @@ class MainActivity : Activity(), SurfaceHolder.Callback {
     @Deprecated("Use Activity Result API in a later iteration")
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
         super.onActivityResult(requestCode, resultCode, data)
+        if (resultCode == RESULT_OK && requestCode in setOf(PICK_PROOT_ARCHIVE, PICK_ROOTFS_ARCHIVE)) {
+            val archive = data?.data ?: return
+            val flags = data.flags and Intent.FLAG_GRANT_READ_URI_PERMISSION
+            try { contentResolver.takePersistableUriPermission(archive, flags) } catch (_: SecurityException) { }
+            installRuntimeArchive(archive, requestCode == PICK_PROOT_ARCHIVE)
+            return
+        }
         if (requestCode == PICK_GAME_FOLDER && resultCode == RESULT_OK) {
             val uri = data?.data ?: return
             val flags = data.flags and (Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION)
