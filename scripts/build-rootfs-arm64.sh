@@ -56,11 +56,17 @@ test -d "$ROOTFS/usr"
 test -d "$ROOTFS/etc"
 test -d "$ROOTFS/tmp"
 
-echo "[4/5] Writing rootfs provenance manifest"
+echo "[4/5] Recording installed package versions"
+docker run --rm --platform linux/arm64 "$IMAGE" \
+  dpkg-query -W -f='${Package}=${Version}\\n' > "$STAGE/packages.lock"
+test -s "$STAGE/packages.lock"
+
+echo "[5/6] Writing rootfs provenance manifest"
 cat > "$STAGE/manifest.properties" <<MANIFEST
 format=storm-rootfs-v1
 distribution=Debian
 release=bookworm
+base.image=debian:bookworm-slim
 architecture=arm64
 abi=arm64-v8a
 libc=glibc
@@ -73,9 +79,9 @@ rootfs.excludes=PRoot; Wine; Hangover; Box64; DXVK; Android Vulkan driver; game 
 runtime.status=not yet validated on Android
 MANIFEST
 
-echo "[5/5] Packaging deterministic rootfs archive"
+echo "[6/6] Packaging normalized rootfs archive"
 tar --sort=name --mtime='UTC 2020-01-01' --owner=0 --group=0 --numeric-owner \
-  -C "$STAGE" -cJf "$ARCHIVE" rootfs manifest.properties
+  -C "$STAGE" -cJf "$ARCHIVE" rootfs manifest.properties packages.lock
 (
   cd "$WORK"
   sha256sum "$(basename "$ARCHIVE")" > SHA256SUMS
