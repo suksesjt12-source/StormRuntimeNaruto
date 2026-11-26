@@ -17,7 +17,9 @@ internal object StormProotHost {
 
     fun runGlibcSmokeTest(context: Context): RuntimeValidation {
         val bundle = File(context.filesDir, "storm-runtime")
-        val proot = File(bundle, "bin/proot")
+        val prootPackage = File(bundle, "proot/root")
+        val proot = File(prootPackage, "bin/proot")
+        val prootLoader = File(prootPackage, "libexec/proot/loader")
         val rootfs = File(bundle, "rootfs")
         val bash = File(rootfs, "bin/bash")
         val loader = File(rootfs, "lib/ld-linux-aarch64.so.1")
@@ -26,6 +28,12 @@ internal object StormProotHost {
             return RuntimeValidation(
                 StormRuntimeProtocol.STATE_PROOT_MISSING,
                 "PRoot ARM64 belum dipasang di app-private storage: ${proot.relativeTo(context.filesDir)}"
+            )
+        }
+        if (!prootLoader.isFile || prootLoader.length() == 0L || !isAarch64Elf(prootLoader)) {
+            return RuntimeValidation(
+                StormRuntimeProtocol.STATE_PROOT_INVALID,
+                "PRoot companion loader tidak ditemukan atau bukan ELF64 AArch64: ${prootLoader.relativeTo(context.filesDir)}"
             )
         }
         if (!proot.canExecute()) {
