@@ -311,7 +311,7 @@ internal object StormRuntimePackageInstaller {
             require(properties.getProperty("format") == "storm-compatibility-v1") {
                 "Format manifest compatibility harus storm-compatibility-v1."
             }
-            for (key in listOf("wine", "box64", "hangover.wow64_i386")) {
+            for (key in listOf("wine", "hangover.wow64_i386")) {
                 val relative = properties.getProperty(key)?.trim().orEmpty()
                 require(relative.isNotEmpty() && !relative.startsWith("/") &&
                     relative.split('/').none { it == ".." }) {
@@ -322,21 +322,26 @@ internal object StormRuntimePackageInstaller {
                     component.isFile && component.length() > 0L) {
                     "Komponen $key tidak ditemukan atau path keluar dari paket."
                 }
-                val validFormat = when (key) {
-                    "wine", "box64" -> isAarch64Elf(component)
-                    // Hangover's wowbox64.dll is a PE32+ ARM64 emulator DLL,
-                    // not a Linux ELF executable.
-                    "hangover.wow64_i386" -> isExpectedPeDll(component, 0xAA64, 0x020b)
-                    else -> false
-                }
+                val validFormat = if (key == "wine") isAarch64Elf(component)
+                    else isExpectedPeDll(component, 0xAA64, 0x020b)
                 require(validFormat) {
                     if (key == "hangover.wow64_i386")
                         "Hangover wowbox64.dll harus PE32+ ARM64 (machine 0xAA64)."
-                    else "Komponen $key harus ELF64 AArch64."
+                    else "Wine harus ELF64 AArch64."
                 }
-                if (key == "wine" || key == "box64") {
-                    Os.chmod(component.absolutePath, 0x1ed)
+                if (key == "wine") Os.chmod(component.absolutePath, 0x1ed)
+            }
+            val optionalBox64 = properties.getProperty("box64")?.trim().orEmpty()
+            if (optionalBox64.isNotEmpty()) {
+                require(!optionalBox64.startsWith("/") && optionalBox64.split('/').none { it == ".." }) {
+                    "Path box64 kosong atau tidak aman."
                 }
+                val box64 = File(staging, optionalBox64).canonicalFile
+                require(box64.path.startsWith(staging.canonicalPath + File.separator) &&
+                    box64.isFile && box64.length() > 0L && isAarch64Elf(box64)) {
+                    "Box64 opsional harus ELF64 AArch64 dan berada di dalam paket."
+                }
+                Os.chmod(box64.absolutePath, 0x1ed)
             }
         }
     }
