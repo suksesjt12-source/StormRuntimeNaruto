@@ -14,5 +14,12 @@
                 <category android:name="android.intent.category.LAUNCHER"/>
             </intent-filter>
         </activity>
+
+        <!-- Control plane only: Wine/PRoot is not loaded into the UI process. -->
+        <service
+            android:name=".StormRuntimeService"
+            android:process=":storm_runtime"
+            android:exported="false"
+            android:stopWithTask="false" />
     </application>
 </manifest>
