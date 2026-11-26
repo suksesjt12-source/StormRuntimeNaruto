@@ -71,7 +71,7 @@ class MainActivity : Activity(), SurfaceHolder.Callback {
         panel.addView(label("Profil perangkat", 20f))
         val deviceInfo = StormRuntimeConfig.deviceSummary()
         panel.addView(label(deviceInfo))
-        panel.addView(label("Profil rekomendasi: " + StormRuntimeConfig.defaultProfile.summary()))
+        panel.addView(label("Profil rekomendasi: " + StormRuntimeConfig.defaultProfile.summary))
         panel.addView(label("Catatan: nilai profil adalah konfigurasi awal yang ditampilkan, belum diterapkan ke proses game."))
         panel.addView(label("Android Vulkan surface diagnostic", 20f))
         surfaceStatus = label("Surface: menunggu SurfaceView dibuat")
