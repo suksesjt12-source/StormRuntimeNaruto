@@ -20,7 +20,6 @@ RUN apt-get update \
  && chmod 1777 /tmp \
  && : > /etc/machine-id \
  && printf '%s\n' 'Storm Runtime ARM64 rootfs' > /etc/hostname \
- && printf '%s\n' 'root:x:0:0:root:/root:/bin/bash' > /etc/passwd \
- && printf '%s\n' 'root:x:0:' > /etc/group
+
 
 CMD ["/bin/bash"]
