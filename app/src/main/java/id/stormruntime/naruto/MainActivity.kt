@@ -250,7 +250,9 @@ class MainActivity : Activity(), SurfaceHolder.Callback {
     override fun surfaceDestroyed(holder: SurfaceHolder) {
         surfaceGeneration++
         surfaceStatus.text = "Surface: dilepas (lifecycle destroy)"
-        surfaceProbeExecutor.execute { NativeBridge.clearAndroidSurface() }
+        if (!surfaceProbeExecutor.isShutdown) {
+            surfaceProbeExecutor.execute { NativeBridge.clearAndroidSurface() }
+        }
     }
 
     private fun inspectGameFolder() {
