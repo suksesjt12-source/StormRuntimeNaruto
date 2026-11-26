@@ -24,14 +24,14 @@ The exact Hangover library location is selected by the package manifest. Do not 
 
 ```properties
 format=storm-compatibility-v1
-wine=bin/wine
+wine=lib/wine/aarch64-unix/wine
 # Optional standalone Box64 Linux executable:
 box64=bin/box64
 # Required Hangover WoW64 emulator DLL built from Box64:
 hangover.wow64_i386=lib/wine/aarch64-windows/wowbox64.dll
 ```
 
-Wine must be a non-empty ELF64 little-endian AArch64 executable. The Hangover `wowbox64.dll` must be a PE32+ ARM64 DLL (machine `0xAA64`, optional-header magic `0x020b`). A standalone Box64 Linux executable is optional; if supplied, it must be ELF64 AArch64. All files must remain inside the package directory. Linux executables are marked executable by the installer.
+Wine must point to the native Unix Wine ELF executable (for example `lib/wine/aarch64-unix/wine`), not a shell wrapper; it must be a non-empty ELF64 little-endian AArch64 executable. The Hangover `wowbox64.dll` must be a PE32+ ARM64 DLL (machine `0xAA64`, optional-header magic `0x020b`). A standalone Box64 Linux executable is optional; if supplied, it must be ELF64 AArch64. All files must remain inside the package directory. Linux executables are marked executable by the installer.
 
 ## Installation checks
 
