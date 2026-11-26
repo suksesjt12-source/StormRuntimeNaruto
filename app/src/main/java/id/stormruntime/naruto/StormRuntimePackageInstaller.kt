@@ -34,6 +34,9 @@ internal object StormRuntimePackageInstaller {
     fun installRootfs(context: Context, archiveUri: Uri, checksumUri: Uri): Result =
         install(context, archiveUri, checksumUri, "rootfs", "rootfs", "storm-rootfs-install")
 
+    fun installCompatibility(context: Context, archiveUri: Uri, checksumUri: Uri): Result =
+        install(context, archiveUri, checksumUri, "compat", "compat", "storm-compat-install")
+
     private fun install(
         context: Context,
         uri: Uri,
@@ -220,11 +223,40 @@ internal object StormRuntimePackageInstaller {
             require(loader.isFile && loader.length() > 0L) { "libexec/proot/loader tidak ditemukan." }
             require(isAarch64Elf(proot) && isAarch64Elf(loader)) { "PRoot dan loader harus ELF64 AArch64." }
             Os.chmod(proot.absolutePath, 0x1ed)
-        } else {
+        } else if (name == "rootfs") {
             val bash = File(staging, "bin/bash")
             val loader = File(staging, "lib/ld-linux-aarch64.so.1")
             require(bash.exists()) { "bin/bash tidak ditemukan." }
             require(loader.exists()) { "lib/ld-linux-aarch64.so.1 tidak ditemukan." }
+            require(isAarch64Elf(bash) && isAarch64Elf(loader)) {
+                "Bash dan dynamic loader Glibc harus ELF64 AArch64."
+            }
+        } else if (name == "compat") {
+            val manifest = File(staging, "manifest.properties")
+            require(manifest.isFile) { "compat/manifest.properties tidak ditemukan." }
+            val properties = java.util.Properties()
+            manifest.inputStream().use { properties.load(it) }
+            require(properties.getProperty("format") == "storm-compatibility-v1") {
+                "Format manifest compatibility harus storm-compatibility-v1."
+            }
+            for (key in listOf("wine", "box64", "hangover.wow64_i386")) {
+                val relative = properties.getProperty(key)?.trim().orEmpty()
+                require(relative.isNotEmpty() && !relative.startsWith("/") &&
+                    relative.split('/').none { it == ".." }) {
+                    "Path $key kosong atau tidak aman di manifest compatibility."
+                }
+                val component = File(staging, relative).canonicalFile
+                require(component.path.startsWith(staging.canonicalPath + File.separator) &&
+                    component.isFile && component.length() > 0L) {
+                    "Komponen $key tidak ditemukan atau path keluar dari paket."
+                }
+                require(isAarch64Elf(component)) {
+                    "Komponen $key harus berupa ELF64 AArch64."
+                }
+                if (key == "wine" || key == "box64") {
+                    Os.chmod(component.absolutePath, 0x1ed)
+                }
+            }
         }
     }
 
