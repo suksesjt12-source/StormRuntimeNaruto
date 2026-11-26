@@ -53,6 +53,21 @@ class StormRuntimeService : Service() {
                     )
                 }
 
+                StormRuntimeProtocol.MSG_RUN_GLIBC_SMOKE_TEST -> {
+                    // Run outside the main looper: PRoot is an external process
+                    // and may block while Android validates ptrace/syscall support.
+                    Thread({
+                        val result = StormProotHost.runGlibcSmokeTest(appContext)
+                        reply(
+                            message,
+                            StormRuntimeProtocol.MSG_SMOKE_TEST_RESULT,
+                            result.state,
+                            result.detail,
+                            result.missing
+                        )
+                    }, "storm-proot-smoke").start()
+                }
+
                 else -> super.handleMessage(message)
             }
         }
