@@ -148,7 +148,7 @@ internal object StormRuntimePackageInstaller {
             }
             link.parentFile?.let { if (!it.exists() && !it.mkdirs()) error("Gagal membuat direktori symlink.") }
             require(!link.exists()) { "Symlink bertabrakan dengan file yang sudah ada." }
-            Files.createSymbolicLink(link.toPath(), Path.of(if (rawTarget.startsWith("/")) targetText else rawTarget))
+            Files.createSymbolicLink(link.toPath(), link.parentFile.toPath().relativize(File(staging, targetText).toPath()))
         }
     }
 
