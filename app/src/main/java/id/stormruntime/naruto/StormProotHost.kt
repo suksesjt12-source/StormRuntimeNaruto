@@ -147,7 +147,7 @@ internal object StormProotHost {
 
         return RuntimeValidation(
             StormRuntimeProtocol.STATE_WINE_SMOKE_OK,
-            "Wine --version berhasil di dalam PRoot/Glibc. Hangover Box64 WoW64 DLL tervalidasi sebagai PE32+ ARM64, tetapi belum dimuat dan belum diuji menjalankan PE32.\nWine: ${wineResult.output.trim().take(250)}\\n$box64Detail"
+            "Wine --version berhasil di dalam PRoot/Glibc. Hangover Box64 WoW64 DLL tervalidasi sebagai PE32+ ARM64, tetapi belum dimuat dan belum diuji menjalankan PE32.\nWine: ${wineResult.output.trim().take(250)}\n$box64Detail"
         )
     }
 
