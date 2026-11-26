@@ -36,6 +36,7 @@ class StormRuntimeService : Service() {
 
     private class IncomingHandler(service: StormRuntimeService) :
         Handler(Looper.getMainLooper()) {
+        private val runtimeService = service
         private val appContext = service.applicationContext
 
         override fun handleMessage(message: Message) {
@@ -66,7 +67,7 @@ class StormRuntimeService : Service() {
                 StormRuntimeProtocol.MSG_RUN_GLIBC_SMOKE_TEST -> {
                     // Serialize tests so repeated taps cannot spawn several PRoot
                     // trees and exhaust memory on a mobile device.
-                    if (!service.smokeTestRunning.compareAndSet(false, true)) {
+                    if (!runtimeService.smokeTestRunning.compareAndSet(false, true)) {
                         reply(
                             message,
                             StormRuntimeProtocol.MSG_SMOKE_TEST_RESULT,
@@ -76,7 +77,7 @@ class StormRuntimeService : Service() {
                         )
                         return
                     }
-                    service.smokeExecutor.execute {
+                    runtimeService.smokeExecutor.execute {
                         try {
                             val result = StormProotHost.runGlibcSmokeTest(appContext)
                             reply(
@@ -87,7 +88,7 @@ class StormRuntimeService : Service() {
                                 result.missing
                             )
                         } finally {
-                            service.smokeTestRunning.set(false)
+                            runtimeService.smokeTestRunning.set(false)
                         }
                     }
                 }
