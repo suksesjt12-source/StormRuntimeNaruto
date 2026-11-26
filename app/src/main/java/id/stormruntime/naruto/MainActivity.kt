@@ -197,7 +197,13 @@ class MainActivity : Activity(), SurfaceHolder.Callback {
     private fun installRuntimeArchive(uri: Uri, checksumUri: Uri, isProot: Boolean, isCompat: Boolean, isDxvk: Boolean) {
         if (installInProgress) return
         installInProgress = true
-        installerStatus.text = if (isProot) "Memverifikasi SHA-256 dan memasang PRoot ARM64..." else "Memverifikasi SHA-256 dan memasang Glibc RootFS..."
+        val packageLabel = when {
+            isProot -> "PRoot ARM64"
+            isCompat -> "Wine + Box64 + Hangover"
+            isDxvk -> "DXVK-Sarek 1.11.0"
+            else -> "Glibc RootFS"
+        }
+        installerStatus.text = "Memverifikasi SHA-256 dan memasang $packageLabel..."
         installerExecutor.execute {
             val result = when {
                 isProot -> StormRuntimePackageInstaller.installProot(this, uri, checksumUri)
