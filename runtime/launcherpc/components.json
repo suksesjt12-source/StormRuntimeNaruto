@@ -1,15 +1,10 @@
 {
   "product": "LauncherPC",
-  "schemaVersion": 1,
+  "schemaVersion": 2,
   "target": {
-    "abis": [
-      "arm64-v8a"
-    ],
+    "abis": ["arm64-v8a"],
     "androidApi": 34,
-    "chipsets": [
-      "MediaTek Helio G99",
-      "MediaTek Helio G100"
-    ],
+    "chipsets": ["MediaTek Helio G99", "MediaTek Helio G100"],
     "gpu": "ARM Mali-G57 MC2",
     "ramGiB": 8
   },
@@ -17,10 +12,7 @@
     "androidHost": "bionic",
     "linuxGuest": "debian-arm64-glibc",
     "userspaceSupervisor": "proot",
-    "windowsCompatibility": [
-      "wine",
-      "hangover"
-    ],
+    "windowsCompatibility": ["wine", "hangover"],
     "cpuTranslator": {
       "name": "box64",
       "baseline": "0.4.4",
@@ -32,22 +24,24 @@
     "maliWrapper": {
       "sourceReference": "GunaCharanTeja/WinlatorMali",
       "referenceRelease": "1.2.1",
-      "bcnEmulationCandidates": [
-        "ASTC",
-        "ETC2"
-      ],
+      "bcnEmulationCandidates": ["ASTC", "ETC2"],
       "status": "source-audit-and-device-validation-required"
     },
     "dxvk": {
-      "preferredCandidate": "3.1.1",
-      "fallbackCandidates": [
-        "2.7.1",
-        "1.10.3"
-      ],
-      "status": "optional-until-vulkan-probe-passes",
-      "rule": "Never force a DXVK build whose Vulkan requirements are not met."
+      "distribution": "DXVK-Sarek",
+      "version": "1.11.0",
+      "releaseName": "Red River",
+      "upstreamProject": "pythonlover02/DXVK-Sarek",
+      "gitTag": "v1.11.0",
+      "gitCommitShort": "7c0e3b2",
+      "releaseUrl": "https://github.com/pythonlover02/DXVK-Sarek/releases/tag/v1.11.0",
+      "vulkanBaseline": "1.1",
+      "shaderCompilation": "release-default",
+      "status": "selected-not-yet-imported-or-built",
+      "enablePolicy": "require-vulkan-1.1-swapchain-graphics-queue-android-surface-and-presentation-probe",
+      "note": "Unofficial DXVK 1.10.x continuation; not upstream doitsujin DXVK 1.11."
     },
-    "fallback": "wined3d"
+    "fallback": ["mali-wrapper", "wined3d"]
   },
   "performance": {
     "initialResolution": "960x540",
@@ -60,7 +54,8 @@
     "physicalHelioG100": false,
     "android14Proot": false,
     "maliVulkanPresentation": false,
-    "dxvkD3d9": false,
+    "dxvkSarek1110Build": false,
+    "dxvkSarekD3d9": false,
     "pe32Wow64": false,
     "narutoMainMenu": false,
     "sustainedGameplay": false
