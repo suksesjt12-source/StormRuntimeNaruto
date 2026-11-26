@@ -9,6 +9,8 @@ import android.os.Looper
 import android.os.Message
 import android.os.Messenger
 import android.os.RemoteException
+import java.util.concurrent.Executors
+import java.util.concurrent.atomic.AtomicBoolean
 
 /**
  * Storm Core's Android-side process boundary.
@@ -18,11 +20,19 @@ import android.os.RemoteException
  * does not pretend that Wine or a Windows executable can be launched yet.
  */
 class StormRuntimeService : Service() {
+    private val smokeExecutor = Executors.newSingleThreadExecutor()
+    private val smokeTestRunning = AtomicBoolean(false)
+
     private val messenger: Messenger by lazy {
         Messenger(IncomingHandler(this))
     }
 
     override fun onBind(intent: Intent?): IBinder = messenger.binder
+
+    override fun onDestroy() {
+        smokeExecutor.shutdownNow()
+        super.onDestroy()
+    }
 
     private class IncomingHandler(service: StormRuntimeService) :
         Handler(Looper.getMainLooper()) {
@@ -54,18 +64,32 @@ class StormRuntimeService : Service() {
                 }
 
                 StormRuntimeProtocol.MSG_RUN_GLIBC_SMOKE_TEST -> {
-                    // Run outside the main looper: PRoot is an external process
-                    // and may block while Android validates ptrace/syscall support.
-                    Thread({
-                        val result = StormProotHost.runGlibcSmokeTest(appContext)
+                    // Serialize tests so repeated taps cannot spawn several PRoot
+                    // trees and exhaust memory on a mobile device.
+                    if (!service.smokeTestRunning.compareAndSet(false, true)) {
                         reply(
                             message,
                             StormRuntimeProtocol.MSG_SMOKE_TEST_RESULT,
-                            result.state,
-                            result.detail,
-                            result.missing
+                            StormRuntimeProtocol.STATE_SMOKE_TEST_BUSY,
+                            "Smoke test PRoot masih berjalan. Tunggu hasilnya sebelum mengulang.",
+                            emptyList()
                         )
-                    }, "storm-proot-smoke").start()
+                        return
+                    }
+                    service.smokeExecutor.execute {
+                        try {
+                            val result = StormProotHost.runGlibcSmokeTest(appContext)
+                            reply(
+                                message,
+                                StormRuntimeProtocol.MSG_SMOKE_TEST_RESULT,
+                                result.state,
+                                result.detail,
+                                result.missing
+                            )
+                        } finally {
+                            service.smokeTestRunning.set(false)
+                        }
+                    }
                 }
 
                 else -> super.handleMessage(message)
